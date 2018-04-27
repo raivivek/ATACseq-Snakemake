@@ -13,5 +13,6 @@
 	"tss" : {
 		"rn5" : "/lab/data/reference/rat/rn5/annot/rn5.tss.refseq.bed",
 		"hg19" : "/lab/data/reference/human/hg19/annot/hg19.tss.refseq.bed"
-	}
+	},
+        "email" : "example@wolverine.theparkerlab.org"
 }

@@ -136,7 +136,7 @@ def get_blacklists(genome):
 def mappability_filter(bed, genome):
     whitelists = get_whitelists(genome) or []
     blacklists = get_blacklists(genome) or []
-    
+
     whitelist_template = 'intersectBed -a {} -b {} -f 1.0'
     whitelist_chain = ' | '.join([whitelist_template.format('stdin', x) for x in whitelists])
 
@@ -313,3 +313,13 @@ rule versions:
         shell('macs2 --version &> {output.macs2_version} || echo ""')
         shell('bedtools --version &> {output.bedtools_version} || echo ""')
         shell('ataqv --version &> {output.ataqv_version} || echo ""')
+
+
+onerror:
+  print("Error: Snakemake aborted!")
+  shell("mail -s 'Snakemake Job Error: See log inside!' {config[email]} < {log}")
+
+
+onsuccess:
+  print("Success: Snakemake completed!")
+  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config[email]} < {log}")
