@@ -308,7 +308,7 @@ rule versions:
         shell('fastqc --version &> {output.fastqc_version} || echo ""')
         shell('cta --version &> {output.cta_version} || echo ""')
         shell('bwa &> {output.bwa_version} || echo ""')
-        shell('picard MarkDuplicates -h &> {output.picard_version} || echo ""')
+        shell('picard MarkDuplicates --version &> {output.picard_version} || echo ""')
         shell('samtools --version &> {output.samtools_version} || echo ""')
         shell('macs2 --version &> {output.macs2_version} || echo ""')
         shell('bedtools --version &> {output.bedtools_version} || echo ""')
