@@ -231,9 +231,36 @@ rule map:
         """bwa mem -M -R \'{params.rg}\' -t {threads} {input.fasta} {input.first} {input.second} 2> {log.bwa} | samtools sort -m 1g -@ {threads} -O bam -T {params.sort_tmp} -o {output} - 2> {log.samtools}"""
 
 
+rule mark_duplicates:
+    input:
+        bam = os.path.join(BWA_DIR, '{library}______{readgroup}.bam')
+    output:
+        bam = os.path.join(MD_DIR, '{library}______{readgroup}.md.bam')
+    params:
+        metrics = os.path.join(MD_DIR, '{library}______{readgroup}.metrics'),
+        tmp_dir = MD_DIR
+    shell:
+        """picard -m 4g MarkDuplicates I={input.bam} O={output.bam} ASSUME_SORTED=true METRICS_FILE={params.metrics} VALIDATION_STRINGENCY=LENIENT TMP_DIR={params.tmp_dir}; ionice -c2 -n7 samtools index {output.bam}"""
+
+
+rule prune:
+    input:
+        bam = os.path.join(MD_DIR, '{library}______{readgroup}.md.bam'),
+        bam_index = os.path.join(MD_DIR, '{library}______{readgroup}.md.bam.bai')
+    output:
+        bam = os.path.join(PRUNE_DIR, '{library}______{readgroup}.pruned.bam'),
+        bam_index = os.path.join(PRUNE_DIR, '{library}______{readgroup}.pruned.bam.bai')
+    params:
+        tmp_dir = MD_DIR,
+        mapq = 30,
+        autosomes = lambda wildcards: get_autosomes(get_genome('{}'.format(wildcards.library)))
+    shell:
+        """samtools view -b -h -f 3 -F 4 -F 8 -F 256 -F 1024 -F 2048 -q {params.mapq} {input.bam} {params.autosomes} > {output.bam}; samtools index {output.bam}"""
+
+
 rule merge:
     input:
-        lambda wildcards: [os.path.join(BWA_DIR, '{}______{}.bam'.format(wildcards.library, readgroup)) for readgroup in iterate_library_readgroups(wildcards.library)]
+        lambda wildcards: [os.path.join(PRUNE_DIR, '{}______{}.bam'.format(wildcards.library, readgroup)) for readgroup in iterate_library_readgroups(wildcards.library)]
     output:
         bam = os.path.join(MERGE_DIR, '{library}.bam'),
         bam_index = os.path.join(MERGE_DIR, '{library}.bam.bai'),
@@ -242,35 +269,6 @@ rule merge:
         sort_tmp_prefix = os.path.join(MERGE_DIR, '{library}.sort')
     shell:
         """samtools merge {params.unsorted_merged_bam} {input}; ionice -c2 -n7 samtools sort -m 1G -O bam -T {params.sort_tmp_prefix} -o {output.bam} {params.unsorted_merged_bam}; samtools index {output.bam}; rm {params.unsorted_merged_bam}"""
-
-
-rule mark_duplicates:
-    input:
-        bam = os.path.join(MERGE_DIR, '{library}.bam'),
-        bam_index = os.path.join(MERGE_DIR, '{library}.bam.bai')
-    output:
-        bam = os.path.join(MD_DIR, '{library}.md.bam'),
-        bam_index = os.path.join(MD_DIR, '{library}.md.bam.bai')
-    params:
-        metrics = os.path.join(MD_DIR, '{library}.metrics'),
-        tmp_dir = MD_DIR
-    shell:
-        """picard -m 4g MarkDuplicates I={input.bam} O={output.bam} ASSUME_SORTED=true METRICS_FILE={params.metrics} VALIDATION_STRINGENCY=LENIENT TMP_DIR={params.tmp_dir}; samtools index {output.bam}"""
-
-
-rule prune:
-    input:
-        bam = os.path.join(MD_DIR, '{library}.md.bam'),
-        bam_index = os.path.join(MD_DIR, '{library}.md.bam.bai')
-    output:
-        bam = os.path.join(PRUNE_DIR, '{library}.pruned.bam'),
-        bam_index = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
-    params:
-        tmp_dir = MD_DIR,
-        mapq = 30,
-        autosomes = lambda wildcards: get_autosomes(get_genome('{}'.format(wildcards.library)))
-    shell:
-        """samtools view -b -h -f 3 -F 4 -F 8 -F 256 -F 1024 -F 2048 -q {params.mapq} {input.bam} {params.autosomes} > {output.bam}; samtools index {output.bam}"""
 
 
 rule peaks:
