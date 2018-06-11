@@ -1,3 +1,10 @@
+#! /usr/bin/env python
+#
+# The Parker Lab (theparkerlab.org)
+# University of Michigan, Ann Arbor
+#
+
+
 import itertools
 import os
 import sys
@@ -34,9 +41,10 @@ MACS2_GENOME_SIZE = {
 }
 
 
-# RESULT PATHS
-
+# set path generator function
 prefix_results = functools.partial(os.path.join, config['results'])
+
+# target directories; relative to root
 FASTQC_DIR = prefix_results('fastqc')
 TRIM_DIR = prefix_results('trim')
 BWA_DIR = prefix_results('bwa')
@@ -45,9 +53,20 @@ MD_DIR = prefix_results('mark_duplicates')
 PRUNE_DIR = prefix_results('prune')
 MACS2_DIR = prefix_results('macs2')
 ATAQV_DIR = prefix_results('ataqv')
+MKARV_DIR = prefix_results('mkarv')
 
+# paths for downsampled data
+DOWNSAMPLE_DIR = prefix_results('downsampled')
+DOWNSAMPLE_BAM_DIR = prefix_results(DOWNSAMPLE_DIR, 'bam')
+DOWNSAMPLE_MACS2_DIR = prefix_results(DOWNSAMPLE_DIR, 'macs2')
+DOWNSAMPLE_ATAQV_DIR = prefix_results(DOWNSAMPLE_DIR, 'ataqv')
+
+# logs and other stuff
 LOG_DIR = prefix_results('logs')
 VERSION_DIR = prefix_results('versions')
+
+# binary paths
+MACS2_BIN = '/home/vivekrai/.local/bin/macs2'
 
 
 # Helper functions
@@ -120,14 +139,14 @@ def get_tss(genome):
 
 
 def get_whitelists(genome):
-    if 'whitelist' in config and genome in config['whitelist']:
+    if genome in config['whitelist']:
         return config['whitelist'][genome]
     else:
         return None
 
 
 def get_blacklists(genome):
-    if 'blacklist' in config and genome in config['blacklist']:
+    if genome in config['blacklist']:
         return config['blacklist'][genome]
     else:
         return None
@@ -157,7 +176,9 @@ rule all:
         [os.path.join(MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x)) for x in config['libraries']],
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
+        #
         # software versions
+        #
         os.path.join(VERSION_DIR, 'fastqc_version.txt'),
         os.path.join(VERSION_DIR, 'cta_version.txt'),
         os.path.join(VERSION_DIR, 'bwa_version.txt'),
@@ -261,9 +282,10 @@ rule peaks:
         name = '{library}',
         genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
         stderr_location = os.path.join(MACS2_DIR, '{library}.macs2.out'),
-        outdir = MACS2_DIR
+        outdir = MACS2_DIR,
+        binary = MACS2_BIN
     shell:
-        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
+        """{params.binary} callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
 
 
 rule blacklist_filter:
@@ -294,6 +316,79 @@ rule ataqv:
         """ataqv --peak-file {input.peaks} --name {params.description} --metrics-file {output.metrics} {params.excluded_regions_option} --tss-file {params.tss_file} --ignore-read-groups {params.organism} {input.md_bam} > {output.stdout_destination}"""
 
 
+##
+# 2. (optional) Perform downsampling; call `rule downsample` directly
+##
+rule downsample:
+    input:
+        [os.path.join(DOWNSAMPLE_BAM_DIR, '{}.downsampled.bam'.format(x)) for x in config['libraries']],
+        [os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x)) for x in config['libraries']],
+        [os.path.join(DOWNSAMPLE_ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']]
+
+
+rule __dwnsmpl_bam:
+  input:
+        bam = os.path.join(PRUNE_DIR, '{library}.pruned.bam'),
+        bam_index = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
+  output:
+        bam = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam'),
+        bam_index = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam.bai')
+  params:
+        frac = 50,
+        seed = 1
+  run:
+      # TODO: Fix so that automagically computes fraction to downsample to given
+      # reads
+       """samtools view -s {params.seed}.{params.frac} -b {input.bam} -o {output.bam}"""
+
+
+rule __dwnsmpl_call_peaks:
+    input:
+        os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam')
+    output:
+        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+    params:
+        name = '{library}',
+        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
+        stderr_location = os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}.macs2.out'),
+        outdir = DOWNSAMPLE_MACS2_DIR,
+        binary = MACS2_BIN
+    shell:
+        """{params.binary} callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
+
+
+rule __dwnsmpl_noblacklist:
+    input:
+        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+    output:
+        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
+    params:
+        filter_cmd = lambda wildcards: mappability_filter(os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak'.format(wildcards.library)), get_genome(wildcards.library))
+    shell:
+        """{params.filter_cmd} > {output}"""
+
+
+rule __dwnsmpl_ataqv:
+    input:
+        bam = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam'),
+        peaks = os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+    output:
+        metrics = os.path.join(DOWNSAMPLE_ATAQV_DIR, '{library}.ataqv.json.gz'),
+        stdout_destination = os.path.join(DOWNSAMPLE_ATAQV_DIR, '{library}.ataqv.out')
+    params:
+        name = '{library}',
+        description = '{library}', # this should really be {description}
+        organism = lambda wildcards: get_organism(get_genome(wildcards.library)),
+        tss_file = lambda wildcards: get_tss(get_genome(wildcards.library)),
+        excluded_regions_option = lambda wildcards: ' '.join(['--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))]) if get_blacklists(get_genome(wildcards.library)) is not None else ''
+    shell:
+        """ataqv --peak-file {input.peaks} --name {params.description} --metrics-file {output.metrics} {params.excluded_regions_option} --tss-file {params.tss_file} --ignore-read-groups {params.organism} {input.bam} > {output.stdout_destination}"""
+
+
+##
+## debug info
+##
+
 rule versions:
     output:
         fastqc_version = os.path.join(VERSION_DIR, 'fastqc_version.txt'),
@@ -314,6 +409,9 @@ rule versions:
         shell('bedtools --version &> {output.bedtools_version} || echo ""')
         shell('ataqv --version &> {output.ataqv_version} || echo ""')
 
+##
+## notification
+##
 
 onerror:
   print("Error: Snakemake aborted!")
@@ -323,3 +421,5 @@ onerror:
 onsuccess:
   print("Success: Snakemake completed!")
   shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config[email]} < {log}")
+
+# vim: ft=snakemake
