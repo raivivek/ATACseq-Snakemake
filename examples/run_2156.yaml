@@ -1,0 +1,121 @@
+'100474___2156':
+    genome: hg19
+    readgroups:
+        100474___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L001.2.fastq.gz
+        100474___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L002.2.fastq.gz
+        100474___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L003.2.fastq.gz
+        100474___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100474_L004.2.fastq.gz
+'100477___2156':
+    genome: hg19
+    readgroups:
+        100477___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L001.2.fastq.gz
+        100477___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L002.2.fastq.gz
+        100477___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L003.2.fastq.gz
+        100477___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100477_L004.2.fastq.gz
+'100479___2156':
+    genome: hg19
+    readgroups:
+        100479___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L001.2.fastq.gz
+        100479___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L002.2.fastq.gz
+        100479___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L003.2.fastq.gz
+        100479___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100479_L004.2.fastq.gz
+'100480___2156':
+    genome: hg19
+    readgroups:
+        100480___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L001.2.fastq.gz
+        100480___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L002.2.fastq.gz
+        100480___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L003.2.fastq.gz
+        100480___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100480_L004.2.fastq.gz
+'100481___2156':
+    genome: hg19
+    readgroups:
+        100481___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L001.2.fastq.gz
+        100481___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L002.2.fastq.gz
+        100481___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L003.2.fastq.gz
+        100481___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100481_L004.2.fastq.gz
+'100482___2156':
+    genome: hg19
+    readgroups:
+        100482___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L001.2.fastq.gz
+        100482___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L002.2.fastq.gz
+        100482___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L003.2.fastq.gz
+        100482___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100482_L004.2.fastq.gz
+'100483___2156':
+    genome: hg19
+    readgroups:
+        100483___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L001.2.fastq.gz
+        100483___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L002.2.fastq.gz
+        100483___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L003.2.fastq.gz
+        100483___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100483_L004.2.fastq.gz
+'100484___2156':
+    genome: hg19
+    readgroups:
+        100484___L1___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L001.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L001.2.fastq.gz
+        100484___L2___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L002.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L002.2.fastq.gz
+        100484___L3___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L003.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L003.2.fastq.gz
+        100484___L4___2156:
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L004.1.fastq.gz
+        - /lab/work/porchard/snakemake_atacseq/data/fastq/100484_L004.2.fastq.gz
+
