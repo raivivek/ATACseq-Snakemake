@@ -37,11 +37,11 @@ if __name__ == '__main__':
     atacseq_config = {}
     atacseq_config['libraries'] = {}
 
-    with open(args.reference_yaml, 'r') as r:
+    with open(args.ref, 'r') as r:
         generic_config = yaml.load(r)
         atacseq_config.update(generic_config)
 
-    for library_yaml in args.library_yaml:
+    for library_yaml in args.lib:
         with open(library_yaml, 'r') as s:
             atacseq_config['libraries'].update(yaml.load(s))
 
