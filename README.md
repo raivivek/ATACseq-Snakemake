@@ -85,7 +85,7 @@ whitelist:
     rn5: /lab/data/reference/rat/rn5/annot/rn5.K30.mappable_only.bed.gz
 ```
 
-### Important
+### Configuration
 The basename for each fastq file must be unique, as must be the readgroup names
 (keys). In many cases the only information that will be changing between
 ATAC-seq experiments is the library information and the desired output directory
@@ -99,14 +99,39 @@ this unchanging JSON:
 
 ```bash
 python /path/to/atacseq_snakemake/bin/make_atacseq_config.py \
-  -r /path/to/results_dir \
-  -ref atacseq.generic_data.yaml \
-  -lib libraries.yaml > complete_atacseq_config.yaml
+      -r /path/to/results_dir                                \
+      -ref atacseq.generic_data.yaml                         \
+      -lib libraries.yaml > complete_atacseq_config.yaml
 ```
 
 Example files are given given in `examples/`.
 
-### Cluster config
+### Running Snakemake
 
-In case you are running on a cluster and need a cluster config file for
-Snakemake, a template cluster config can be found in `src/` as well.
+Snakemake would then require following files:
+
+1. Snakefile (with your workflow)
+2. Configuration (with your library information generated in previous step)
+3. (Optionally) Cluster configuration if running on Cluster
+
+One default cluster configuration for the pipeline is `src/cluster.config`. In
+this mode, Snakemake outputs all job-logs to `logs/` dir, which must be created
+before running Snakemake.
+
+The pipeline can then be run:
+
+```bash
+$ mkdir -p logs
+$ nohup snakemake -p -j 10 \
+        --configfile /path/to/complete_atacseq_config.yaml \
+        --snakefile /path/to/Snakefile \
+        --cluster-config /path/to/cluster.config \
+        --cluster "sbatch -t {cluster.time} -n {cluster.N} --mem-per-cpu={cluster.mem}" \
+        &> snakemake.nohup &
+```
+
+### Dry-run
+
+It recommended to perform a dry-run of Snakemake to see if it properly generates
+all the files in workflow before submitting to cluster. For a dry-run, add `-n`
+flag to the command above.
