@@ -35,8 +35,13 @@ MarkDuplicates ...`.
 
 ## Usage:
 
+The Snakemake file utilizes the `basename` of `fastq` files to organize and
+generate files, as must be the readgroup names; thus they **must** be unique.
+
 This Snakemake pipeline requires a config file (YAML format) with the following
-information:
+information (toggle to see):
+
+<details>
 
 ```yaml
 blacklist:
@@ -85,13 +90,15 @@ whitelist:
     rn5: /lab/data/reference/rat/rn5/annot/rn5.K30.mappable_only.bed.gz
 ```
 
+</details>
+
 ### Configuration
-The basename for each fastq file must be unique, as must be the readgroup names
-(keys). In many cases the only information that will be changing between
-ATAC-seq experiments is the library information and the desired output directory
-(paths to BWA indices, blacklists, etc. will remain unchanged). It may therefore
-by convenient to have a single permanent JSON file with all of the required
-information except the library information and the results dir.
+
+In many cases the only information that will be changing between ATAC-seq
+experiments is *i)* the library information and *ii)* the desired output
+directory (paths to BWA indices, blacklists, etc. will remain unchanged). It may
+therefore by convenient to have a single permanent JSON file with all of the
+required information except the library information and the results dir.
 
 If this is the case, you can use the python script at
 `src/make_atacseq_config.py` to add library information and the results path to
