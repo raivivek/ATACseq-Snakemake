@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
+#
+# Peter Orchard
+# porchard@umich.edu
+#
+# Vivek Rai
+# vivekrai@umich.edu
+#
+# University of Michigan
+# (c) Parker Lab
+#
 
-import argparse
 import sys
 import os
 import yaml
+import argparse
 
 __description__ = """
     Given

@@ -4,7 +4,6 @@
 # University of Michigan, Ann Arbor
 #
 
-
 import itertools
 import os
 import sys
@@ -42,31 +41,28 @@ MACS2_GENOME_SIZE = {
 
 
 # set path generator function
-prefix_results = functools.partial(os.path.join, config['results'])
+results = functools.partial(os.path.join, config['results'])
 
 # target directories; relative to root
-FASTQC_DIR = prefix_results('fastqc')
-TRIM_DIR = prefix_results('trim')
-BWA_DIR = prefix_results('bwa')
-MERGE_DIR = prefix_results('merge_readgroups')
-MD_DIR = prefix_results('mark_duplicates')
-PRUNE_DIR = prefix_results('prune')
-MACS2_DIR = prefix_results('macs2')
-ATAQV_DIR = prefix_results('ataqv')
-MKARV_DIR = prefix_results('mkarv')
+FASTQC_DIR = results('fastqc')
+TRIM_DIR = results('trim')
+BWA_DIR = results('bwa')
+MERGE_DIR = results('merge_readgroups')
+MD_DIR = results('mark_duplicates')
+PRUNE_DIR = results('prune')
+MACS2_DIR = results('macs2')
+ATAQV_DIR = results('ataqv')
+MKARV_DIR = results('mkarv')
 
 # paths for downsampled data
-DOWNSAMPLE_DIR = prefix_results('downsampled')
-DOWNSAMPLE_BAM_DIR = prefix_results(DOWNSAMPLE_DIR, 'bam')
-DOWNSAMPLE_MACS2_DIR = prefix_results(DOWNSAMPLE_DIR, 'macs2')
-DOWNSAMPLE_ATAQV_DIR = prefix_results(DOWNSAMPLE_DIR, 'ataqv')
+DOWNSAMPLE_DIR = results('downsampled')
+DOWNSAMPLE_BAM_DIR = results(DOWNSAMPLE_DIR, 'bam')
+DOWNSAMPLE_MACS2_DIR = results(DOWNSAMPLE_DIR, 'macs2')
+DOWNSAMPLE_ATAQV_DIR = results(DOWNSAMPLE_DIR, 'ataqv')
 
 # logs and other stuff
-LOG_DIR = prefix_results('logs')
-VERSION_DIR = prefix_results('versions')
-
-# binary paths
-MACS2_BIN = '/home/vivekrai/.local/bin/macs2'
+LOG_DIR = results('logs')
+VERSION_DIR = results('versions')
 
 
 # Helper functions
@@ -280,10 +276,9 @@ rule peaks:
         name = '{library}',
         genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
         stderr_location = os.path.join(MACS2_DIR, '{library}.macs2.out'),
-        outdir = MACS2_DIR,
-        binary = MACS2_BIN
+        outdir = MACS2_DIR
     shell:
-        """{params.binary} callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
+        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
 
 
 rule blacklist_filter:

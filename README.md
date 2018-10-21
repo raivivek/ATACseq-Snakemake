@@ -11,11 +11,11 @@ default, will work with the following genomes:
 5. rn4
 6. rn5 
 
-This can be changed by adding the desired genome's information to the `#GENERIC DATA`
-section of the Snakefile (although ataqv may fail to run for organisms
-besides fly, human, mouse, rat, worm, or yeast -- if you are processing data
-from another organism, you will need to edit the pipeline to supply ataqv with
-an autosomal reference file).
+This can be changed by adding the desired genome's information to
+the `#GENERIC DATA` section of the Snakefile (although ataqv may fail to run
+for organisms besides fly, human, mouse, rat, worm, or yeast -- if you are
+processing data from another organism, you will need to edit the pipeline
+to supply ataqv with an autosomal reference file).
 
 ## Dependencies
 
@@ -24,22 +24,27 @@ Python >=2.7, and the following software packages:
 1. fastqc
 2. cta (can be downloaded from the Parker Lab github)
 3. BWA
-4. picard
+4. picard (for example, `picard MarkDuplicates`)
 5. samtools
 6. macs2
 7. bedtools
 8. ataqv
 
-Also, assumes that picard MarkDuplicates can be called using the syntax: `picard
-MarkDuplicates ...`.
-
-## Usage:
+## Usage
 
 The Snakemake file utilizes the `basename` of `fastq` files to organize and
 generate files, as must be the readgroup names; thus they **must** be unique.
 
-This Snakemake pipeline requires a config file (YAML format) with the following
-information (toggle to see):
+<details>
+Snakemake uses YAML (Yet Another Markup Language) for configuration. It is
+human readable, and very often, you can directly edit the file with ease unlike
+JSON. Further, YAML is a superset of JSON for the most parts so all YAML
+libraries can work with JSON, if needed.
+</details>
+
+
+This Snakemake pipeline requires a YAML config file with the following
+information (toggle to see).
 
 <details>
 
@@ -95,14 +100,16 @@ whitelist:
 ### Configuration
 
 In many cases the only information that will be changing between ATAC-seq
-experiments is *i)* the library information and *ii)* the desired output
-directory (paths to BWA indices, blacklists, etc. will remain unchanged). It may
-therefore by convenient to have a single permanent JSON file with all of the
+experiments is the **(a) library information, and (b) desired output
+directory**; while paths to BWA indices, blacklists, etc. will remain
+unchanged.
+
+It may therefore by convenient to have a single permanent file with all of the
 required information except the library information and the results dir.
 
 If this is the case, you can use the python script at
-`src/make_atacseq_config.py` to add library information and the results path to
-this unchanging JSON:
+`bin/make_atacseq_config.py` to add library information and the results path to
+this unchanging YAML:
 
 ```bash
 python /path/to/atacseq_snakemake/bin/make_atacseq_config.py \
@@ -111,7 +118,15 @@ python /path/to/atacseq_snakemake/bin/make_atacseq_config.py \
       -lib libraries.yaml > complete_atacseq_config.yaml
 ```
 
-Example files are given given in `examples/`.
+#### Generating `libraries.yaml`
+
+Example code is provided in `bin/make_library_config.py` which would generate a
+`libraries.yaml` file provided FASTQ files for your ATAC-seq experiment.
+
+#### Generating `reference.yaml`
+
+Example file containing reference data is given in
+`config/atacseq.generic_data.yaml`.
 
 ### Running Snakemake
 
@@ -121,24 +136,16 @@ Snakemake would then require following files:
 2. Configuration (with your library information generated in previous step)
 3. (Optionally) Cluster configuration if running on Cluster
 
-One default cluster configuration for the pipeline is `src/cluster.config`. In
-this mode, Snakemake outputs all job-logs to `logs/` dir, which must be created
-before running Snakemake.
+A default cluster configuration for the pipeline is `config/cluster.yaml`.
 
-The pipeline can then be run:
+The pipeline can then be run with simple command:
 
 ```bash
-$ mkdir -p logs
-$ nohup snakemake -p -j 10 \
-        --configfile /path/to/complete_atacseq_config.yaml \
-        --snakefile /path/to/Snakefile \
-        --cluster-config /path/to/cluster.config \
-        --cluster "sbatch -t {cluster.time} -n {cluster.N} --mem-per-cpu={cluster.mem}" \
-        &> snakemake.nohup &
+$ make run
 ```
 
 ### Dry-run
 
-It recommended to perform a dry-run of Snakemake to see if it properly generates
-all the files in workflow before submitting to cluster. For a dry-run, add `-n`
-flag to the command above.
+```bash
+$ make dry_run
+```
