@@ -1,0 +1,31 @@
+__default__:
+    N: 1
+    mem: 4000
+    cpus: 1
+    name: JOBNAME.{rule}.{wildcards}
+    output: logs/{rule}.{wildcards}.out
+    time: 01:00:00
+map:
+    N: 1
+    mem: 15000
+    time: '10:00:00'
+mark_duplicates:
+    N: 1
+    mem: 15000
+    time: '10:00:00'
+merge:
+    N: 1
+    mem: 5000
+    time: '10:00:00'
+prune:
+    N: 1
+    mem: 4000
+    time: 01:00:00
+trim:
+    N: 1
+    mem: 5000
+    time: 03:00:00
+versions:
+    N: 1
+    mem: 1000
+    time: 00:01:00
