@@ -148,20 +148,6 @@ def get_blacklists(genome):
         return None
 
 
-def mappability_filter(bed, genome):
-    whitelists = get_whitelists(genome) or []
-    blacklists = get_blacklists(genome) or []
-
-    whitelist_template = 'intersectBed -a {} -b {} -f 1.0'
-    whitelist_chain = ' | '.join([whitelist_template.format('stdin', x) for x in whitelists])
-
-    blacklist_template = 'intersectBed -a {} -b {} -v'
-    blacklist_chain = ' | '.join([blacklist_template.format('stdin', x) for x in blacklists])
-
-    command = ' | '.join([x for x in ['cat {bed}'.format(**locals()), whitelist_chain, blacklist_chain] if x != ''])
-    return command
-
-
 # Now the pipeline itself
 
 rule all:
@@ -278,7 +264,7 @@ rule peaks:
         stderr_location = os.path.join(MACS2_DIR, '{library}.macs2.out'),
         outdir = MACS2_DIR
     shell:
-        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
+        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --SPMR --broad --keep-dup all &> {params.stderr_location}"""
 
 
 rule blacklist_filter:
@@ -286,10 +272,8 @@ rule blacklist_filter:
         os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
     output:
         os.path.join(MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
-    params:
-        filter_cmd = lambda wildcards: mappability_filter(os.path.join(MACS2_DIR, '{}_peaks.broadPeak'.format(wildcards.library)), get_genome(wildcards.library))
     shell:
-        """{params.filter_cmd} > {output}"""
+        """mappability_filter > {output}"""
 
 
 rule ataqv:
@@ -344,10 +328,9 @@ rule __dwnsmpl_call_peaks:
         name = '{library}',
         genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
         stderr_location = os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}.macs2.out'),
-        outdir = DOWNSAMPLE_MACS2_DIR,
-        binary = MACS2_BIN
+        outdir = DOWNSAMPLE_MACS2_DIR
     shell:
-        """{params.binary} callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --keep-dup all &> {params.stderr_location}"""
+        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --SPMR --keep-dup all &> {params.stderr_location}"""
 
 
 rule __dwnsmpl_noblacklist:
