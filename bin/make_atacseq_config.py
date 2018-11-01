@@ -46,7 +46,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "-r",
-        "--results",
+        "-results",
         action="store",
         help="Base directory in which the ATAC-seq analysis results should be stored (default: current working directory).",
     )
@@ -69,6 +69,6 @@ if __name__ == "__main__":
         with open(library_yaml, "r") as s:
             atacseq_config["libraries"].update(yaml.load(s))
 
-    atacseq_config["results"] = args.results or os.getcwd()
+    atacseq_config["results"] = args.r or os.getcwd()
 
     print(yaml.dump(atacseq_config, indent=4, default_flow_style=False))
