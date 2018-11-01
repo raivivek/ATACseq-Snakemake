@@ -18,22 +18,24 @@ __description__ = """
         genome: hg19
         readgroups:
             'ABCD1_L1':
-                - 'ABCD1_L1.1.fastq.gz'
-                - 'ABCD1_L1.2.fastq.gz'
+                - '/path/to/ABCD1_L1.1.fastq.gz'
+                - '/path/to/ABCD1_L1.2.fastq.gz'
             'ABCD1_L2':
-                - 'ABCD1_L2.1.fastq.gz'
-                - 'ABCD1_L2.2.fastq.gz'
+                - '/path/to/ABCD1_L2.1.fastq.gz'
+                - '/path/to/ABCD1_L2.2.fastq.gz'
+
+    Prefer absolute path for files. Downstream tools may or may not play nice
+    with symlinked files.
 """
-
-
 
 import sys
 import re
 import yaml
 import pathlib
+import glob
 
 # match files such as atacseq.1.fq.gz or atacseq.2.fastq.gz
-FASTQ_RE = '(.*).([12]).(?:fastq|fq).*'
+FASTQ_RE = "(.*).([12]).(?:fastq|fq).*"
 
 LIBRARIES = {}
 
@@ -42,10 +44,11 @@ def parse_fastq_name(f):
     """ Return FASTQ "library" name and whether it is "first" or "second" set
     of reads (paired-end)."""
 
-    m = re.search(FASTQ_RE, os.path.basename(f))
+    m = re.search(FASTQ_RE, pathlib.Path(f).name)
     library = m.group(1)
     first_or_second = m.group(2)
     return [library, first_or_second]
+
 
 def create_library_item(fastq):
     """ Parse FASTQ filenames; and return a dictionary with library names
@@ -58,12 +61,26 @@ def create_library_item(fastq):
     
     """
 
-    pass
+
+#    files = glob.glob('/path/to/*.fastq.gz')
+#
+#    for fastq in files:
+#        lib, f_or_s = parse_fastq_name(fastq)
+#
+#        if lib not in LIBRARIES:
+#            LIBRARIES[lib] = {}
+#            LIBRARIES[lib]['genome'] = 'hg19'
+#            LIBRARIES[lib]['readgroups'] = {}
+#
+#        # generate readgroups
+#        rg = library + '_RG1'
+#
+#        if rg not in LIBRARIES[lib]['readgroups']:
+#            LIBRARIES[lib]['readgroups'] = []
+#
+#        LIBRARIES[lib]['readgroups'][rg].append(fastq)
+#        LIBRARIES[lib]['readgroups'][rg].sort()
 
 
-
-
-if __name__=='__main__':
-    #print(yaml.dump(LIBRARIES, indent=4, default_flow_style=False))
-    pass
-
+if __name__ == "__main__":
+    print(yaml.dump(LIBRARIES, indent=4, default_flow_style=False))
