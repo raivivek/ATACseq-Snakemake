@@ -233,14 +233,15 @@ rule map:
     output:
         os.path.join(BWA_DIR, '{library}______{readgroup}.bam')
     params:
-        sort_tmp = os.path.join(BWA_DIR, '{library}______{readgroup}.sort.tmp'),
         rg = '\\t'.join(['@RG', 'ID:{}'.format('{readgroup}'), 'LB:{}'.format('{library}')])
-    threads: 1
+    threads: 4
     log:
         bwa = os.path.join(LOG_DIR, 'map.bwa.{library}______{readgroup}.log'),
         samtools = os.path.join(LOG_DIR, 'map.samtools.{library}______{readgroup}.log')
     shell:
-        """bwa mem -M -R \'{params.rg}\' -t {threads} {input.fasta} {input.first} {input.second} 2> {log.bwa} | samtools sort -m 1g -@ {threads} -O bam -T {params.sort_tmp} -o {output} - 2> {log.samtools}"""
+        """
+        bwa mem -I 200,200,5000 -M -R \'{params.rg}\' -t {threads} {input.index} {input.first} {input.second} 2> {log.bwa} \
+            | samtools sort -m 1g -@ {threads} -O bam -o {output} - 2> {log.samtools}"""
 
 
 rule mark_duplicates:
