@@ -312,7 +312,6 @@ rule prune:
         samtools index {output.bam}
         """
 
-
 rule peaks:
     input:
         os.path.join(PRUNE_DIR, '{library}.pruned.bam')
@@ -438,7 +437,7 @@ rule __dwnsmpl_bam:
             fi
         """
         )
-
+       
 
 rule __dwnsmpl_call_peaks:
     input:
