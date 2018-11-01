@@ -1,10 +1,10 @@
 # Makefile
 #
-# {{cookiecutter.name}}
-# {{cookiecutter.email}}
-# (c) {{cookiecutter.affiliation}}
+# {{name}}
+# {{email}}
+# (c) {{affiliation}}
 #
-# {{cookiecutter.date}}
+# {{date}}
 #
 
 .PHONY = dry_run run
@@ -15,7 +15,7 @@
 # -p: commands run
 dry_run:
 	@snakemake -npr \
-		--jn "snakejob.{jobid}" \
+		--jn "atacseq.{jobid}" \
 		--snakefile src/Snakefile \
 		--configfile config/config.yaml
 
@@ -25,7 +25,7 @@ dry_run:
 # --rerun-incomplete: re-run any incomplete rules
 run:
 	@nohup snakemake \
-		--jn "snakejob.{jobid}" \
+		--jn "atacseq.{jobid}" \
 		-j 999 \
 		--keep-going \
 		--rerun-incomplete \
