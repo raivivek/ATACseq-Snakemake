@@ -10,8 +10,13 @@ import sys
 import functools
 
 
-# GENERIC DATA
+if not config['results']:
+  print("Project ROOT not set. Check config. Exiting.")
+  sys.exit(1)
 
+
+## Generic data
+#
 ORGANISMS = {
     'rn4': 'rat',
     'rn5': 'rat',
@@ -40,7 +45,8 @@ MACS2_GENOME_SIZE = {
 }
 
 
-# set path generator function
+## Generate paths
+#
 results = functools.partial(os.path.join, config['results'])
 
 # target directories; relative to root
@@ -65,8 +71,8 @@ LOG_DIR = results('logs')
 VERSION_DIR = results('versions')
 
 
-# Helper functions
-
+## Helper functions
+#
 def iterate_all_libraries():
     for library in sorted(config['libraries'].keys()):
         yield library
@@ -105,12 +111,18 @@ def fastq_basename_to_fastq(fastq_basename):
     for fastq in iterate_all_fastqs():
         if fastq_basename == os.path.basename(fastq):
             return fastq
-    sys.stderr.write('ERROR: could not find fastq corresponding to {}; exiting.\n'.format(fastq_basename))
-    sys.exit()
+    sys.stderr.write(
+        'ERROR: Could not find FASTQ corresponding to {}; exiting.\n'.format(
+            fastq_basename
+        )
+    )
+    sys.exit(1)
 
 
 def fastq_to_trimmed_fastq(fastq):
-    trimmed_fastq_basename = os.path.basename(fastq).replace('.fastq.gz', '.trimmed.fastq.gz')
+    trimmed_fastq_basename = os.path.basename(fastq).replace(
+        '.fastq.gz', '.trimmed.fastq.gz'
+    )
     return os.path.join(TRIM_DIR, trimmed_fastq_basename)
 
 
@@ -122,12 +134,12 @@ def get_organism(genome):
     return ORGANISMS[genome]
 
 
-def get_bwa_index(genome):
-    return config['bwa_index'][genome]
-
-
 def get_autosomes(genome):
     return AUTOSOMAL_REFERENCES[genome]
+
+
+def get_bwa_index(genome):
+    return config['bwa_index'][genome]
 
 
 def get_tss(genome):
@@ -135,17 +147,11 @@ def get_tss(genome):
 
 
 def get_whitelists(genome):
-    if genome in config['whitelist']:
-        return config['whitelist'][genome]
-    else:
-        return None
+    return config['whitelist'].get(genome)
 
 
 def get_blacklists(genome):
-    if genome in config['blacklist']:
-        return config['blacklist'][genome]
-    else:
-        return None
+    return config['blacklist'].get(genome)
 
 
 # Now the pipeline itself
@@ -153,9 +159,14 @@ def get_blacklists(genome):
 rule all:
     input:
         # fastqc output
-        [os.path.join(FASTQC_DIR, '{}_fastqc.zip'.format(os.path.basename(fastq).replace('.fastq.gz', ''))) for fastq in iterate_all_fastqs()],
-        # blacklist-filtered peak files
-        [os.path.join(MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x)) for x in config['libraries']],
+        [
+            os.path.join(FASTQC_DIR, '{}_fastqc.zip'.format(
+                os.path.basename(fastq).replace('.fastq.gz', ''))
+            )
+            for fastq in iterate_all_fastqs()
+        ],
+        # blacklist-filtered master peak files
+        [os.path.join(MACS2_DIR, '{}_peaks.master'.format(x)) for x in config['libraries']],
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
         #
@@ -173,7 +184,9 @@ rule all:
 
 rule fastqc:
     input:
-        lambda wildcards: fastq_basename_to_fastq('{}.fastq.gz'.format(wildcards.fastq_basename))
+        lambda wildcards: fastq_basename_to_fastq(
+            '{}.fastq.gz'.format(wildcards.fastq_basename)
+        )
     output:
         os.path.join(FASTQC_DIR, '{fastq_basename}_fastqc.zip')
     params:
@@ -185,9 +198,14 @@ rule fastqc:
 
 
 rule trim:
+    """Use cta to trim adapter sequences"""
     input:
-        first = lambda wildcards: fastq_basename_to_fastq('{}.1.fastq.gz'.format(wildcards.fastq_basename)),
-        second = lambda wildcards: fastq_basename_to_fastq('{}.2.fastq.gz'.format(wildcards.fastq_basename))
+        first = lambda wildcards: fastq_basename_to_fastq(
+            '{}.1.fastq.gz'.format(wildcards.fastq_basename)
+        ),
+        second = lambda wildcards: fastq_basename_to_fastq(
+            '{}.2.fastq.gz'.format(wildcards.fastq_basename)
+        )
     output:
         first = os.path.join(TRIM_DIR, '{fastq_basename}.1.trimmed.fastq.gz'),
         second = os.path.join(TRIM_DIR, '{fastq_basename}.2.trimmed.fastq.gz')
@@ -196,10 +214,22 @@ rule trim:
 
 
 rule map:
+    """Map reads to reference using BWA MEM algorithm.
+
+    For ATAC-seq data, we use `-I 200,200,5000` flag which correspond to the
+    mean, standard deviation, and max limits of the insert size distribution.
+    Reads outside this are ignored by BWA. The defaults inferred by BWA are
+    not best suited for the typical ATAC-seq insert size distribution if you
+    analysis uses larger size fragments.
+    """
     input:
-        first = lambda wildcards: fastq_to_trimmed_fastq(list_readgroup_fastqs(wildcards.readgroup)[0]),
-        second = lambda wildcards: fastq_to_trimmed_fastq(list_readgroup_fastqs(wildcards.readgroup)[1]),
-        fasta = lambda wildcards: get_bwa_index(get_genome(wildcards.library))
+        first = lambda wildcards: fastq_to_trimmed_fastq(
+            list_readgroup_fastqs(wildcards.readgroup)[0]
+        ),
+        second = lambda wildcards: fastq_to_trimmed_fastq(
+            list_readgroup_fastqs(wildcards.readgroup)[1]
+        ),
+        index = lambda wildcards: get_bwa_index(get_genome(wildcards.library))
     output:
         os.path.join(BWA_DIR, '{library}______{readgroup}.bam')
     params:
@@ -282,15 +312,28 @@ rule ataqv:
         peaks = os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
     output:
         metrics = os.path.join(ATAQV_DIR, '{library}.ataqv.json.gz'),
-        stdout_destination = os.path.join(ATAQV_DIR, '{library}.ataqv.out')
+    log:
+        os.path.join(ATAQV_DIR, '{library}.ataqv.out')
     params:
         name = '{library}',
         description = '{library}', # this should really be {description}
         organism = lambda wildcards: get_organism(get_genome(wildcards.library)),
-        tss_file = lambda wildcards: get_tss(get_genome(wildcards.library)),
-        excluded_regions_option = lambda wildcards: ' '.join(['--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))]) if get_blacklists(get_genome(wildcards.library)) is not None else ''
+        tss = lambda wildcards: get_tss(get_genome(wildcards.library)),
+        excluded_regions_option = lambda wildcards: ' '.join([
+            '--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))
+        ]) if not get_blacklists(get_genome(wildcards.library)) else ''
     shell:
-        """ataqv --peak-file {input.peaks} --name {params.description} --metrics-file {output.metrics} {params.excluded_regions_option} --tss-file {params.tss_file} --ignore-read-groups {params.organism} {input.md_bam} > {output.stdout_destination}"""
+        """
+        ataqv --peak-file {input.peaks}    \
+          --name {params.description}      \
+          --metrics-file {output.metrics}  \
+          {params.excluded_regions_option} \
+          --tss-file {params.tss}          \
+          --ignore-read-groups             \
+          {params.organism}                \
+          {input.md_bam}                   \
+          > {log}
+        """
 
 
 ##
@@ -309,14 +352,44 @@ rule __dwnsmpl_bam:
         bam_index = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
   output:
         bam = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam'),
-        bam_index = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam.bai')
+        bai = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam.bai')
+  threads: 1
   params:
-        frac = 50,
-        seed = 1
-  run:
-      # TODO: Fix so that automagically computes fraction to downsample to given
-      # reads
-       """samtools view -s {params.seed}.{params.frac} -b {input.bam} -o {output.bam}"""
+        seed = 2018,
+        depth = config.get('subsample_depth')
+  shell:
+      # if not supplied; no need to downsampled, just error and exit
+      if params.depth is None:
+          sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
+          sys.exit(1)
+      else:
+          # Compute desired fraction of reads to sub-sample using samtools
+          # flagstat.
+          #
+          # __TOTAL_READS computes the total number of # "single-reads" in the
+          # given input BAM file, and then we compute the fraction to subsample
+          # in __FRACTION (requires `bc` tools, POSIX so almost always
+          # available). The __FRACTION value already contains a '.' (period) so
+          # we omit that in samtools call. `scale=3` in `bc -l` limits the number
+          # of decimal places to 3.
+          #
+          # Further, simply symlink files if desired depth is more then available
+          # number of reads in the file.
+          #
+          # Note, (( . )) is not a typo. Using BASH's arithmetic context.
+        shell(
+        """
+            __TOTAL_READS=$(samtools flagstat {input.bam} | head -n1 | cut -d'+' -f1) \
+            && if (( $_TOTAL_READS < {params.depth} )); then
+                ln -s {input.bam} {output.bam}
+                ln -s {input.bai} {output.bai}
+            else
+                __FRACTION=$(bc -l <<< "scale=3; {params.depth}/$__TOTAL_READS") \
+                && samtools view -@ {threads} -b -h -s {params.seed}$__FRACTION {input.bam} -o {output.bam}
+                samtools index {output.bam}
+            fi
+        """
+        )
 
 
 rule __dwnsmpl_call_peaks:
@@ -324,13 +397,31 @@ rule __dwnsmpl_call_peaks:
         os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam')
     output:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+    log:
+        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}.macs2.out'),
     params:
         name = '{library}',
         genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
-        stderr_location = os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}.macs2.out'),
         outdir = DOWNSAMPLE_MACS2_DIR
     shell:
-        """macs2 callpeak -t {input} --outdir {params.outdir} -f BAM -n {params.name} -g {params.genome_size} --nomodel --shift -100 --seed 762873 --extsize 200 -B --broad --SPMR --keep-dup all &> {params.stderr_location}"""
+        """
+        macs2 callpeak \
+          --outdir {params.outdir} \
+          -t {input} \
+          -n {params.name} \
+          -f BAM \
+          -g {params.genome_size} \
+          --nomodel \
+          --shift -100 \
+          --extsize 200 \
+          --seed 2018 \
+          -B \
+          --broad \
+          --keep-dup all \
+          --SPMR \
+          &> {log}
+
+        """
 
 
 rule __dwnsmpl_noblacklist:
@@ -338,10 +429,8 @@ rule __dwnsmpl_noblacklist:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
     output:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
-    params:
-        filter_cmd = lambda wildcards: mappability_filter(os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak'.format(wildcards.library)), get_genome(wildcards.library))
     shell:
-        """{params.filter_cmd} > {output}"""
+        """mappability_filter {input} > {output}"""
 
 
 rule __dwnsmpl_ataqv:
@@ -358,7 +447,17 @@ rule __dwnsmpl_ataqv:
         tss_file = lambda wildcards: get_tss(get_genome(wildcards.library)),
         excluded_regions_option = lambda wildcards: ' '.join(['--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))]) if get_blacklists(get_genome(wildcards.library)) is not None else ''
     shell:
-        """ataqv --peak-file {input.peaks} --name {params.description} --metrics-file {output.metrics} {params.excluded_regions_option} --tss-file {params.tss_file} --ignore-read-groups {params.organism} {input.bam} > {output.stdout_destination}"""
+        """
+        ataqv --peak-file {input.peaks}    \
+          --name {params.description}      \
+          --metrics-file {output.metrics}  \
+          {params.excluded_regions_option} \
+          --tss-file {params.tss}          \
+          --ignore-read-groups             \
+          {params.organism}                \
+          {input.bam}                      \
+          > {log}
+        """
 
 
 ##
@@ -398,4 +497,4 @@ onsuccess:
   print("Success: Snakemake completed!")
   shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config[email]} < {log}")
 
-# vim: ft=snakemake
+# vim: syntax=snakemake
