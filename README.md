@@ -1,7 +1,7 @@
 # Snakemake ATAC-seq pipeline
 
 The standard Parker Lab ATAC-seq pipeline in Snakemake (for paired-end data).
-Fastq file naming scheme should be '\*.1.fastq.gz' and '\*.2.fastq.gz'. By
+Fastq file naming scheme should be `*.1.fastq.gz` and `*.2.fastq.gz`. By
 default, will work with the following genomes:
 
 1. hg19
