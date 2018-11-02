@@ -144,6 +144,12 @@ The pipeline can then be run with simple command:
 $ make run
 ```
 
+In case downsampling is desired and `config['subsample_depth']` is set, one can run:
+
+```bash
+$ make downsample
+```
+
 ### Dry-run
 
 ```bash
