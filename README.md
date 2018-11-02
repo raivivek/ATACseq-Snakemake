@@ -138,15 +138,17 @@ Snakemake would then require following files:
 
 A default cluster configuration for the pipeline is `config/cluster.yaml`.
 
-The pipeline can then be run with simple command:
+The pipeline can then be run with simple command, which runs atacseq pipeline
+with subsampling (if `config['subsample_depth']` is set).
+
+```bash
+$ make run_all
+```
+
+If subsampling is not desired, one can run the commands one at a time:
 
 ```bash
 $ make run
-```
-
-In case downsampling is desired and `config['subsample_depth']` is set, one can run:
-
-```bash
 $ make downsample
 ```
 

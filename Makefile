@@ -19,10 +19,18 @@ dry_run:
 		--snakefile src/Snakefile \
 		--configfile config/config.yaml
 
+unlock:
+	@snakemake --unlock \
+		--snakefile src/Snakefile \
+		--configfile config/config.yaml
+
 # nohup: run in background 
 # -j: maximum number of jobs to put in queue
 #	--keep-going: keep going with independent jobs if some fail
 # --rerun-incomplete: re-run any incomplete rules
+
+.run_all: run downsample
+
 run:
 	@nohup snakemake \
 		--jn "atacseq.{jobid}" \
@@ -33,4 +41,16 @@ run:
 		--configfile config/config.yaml \
 		--cluster-config config/cluster.yaml \
 		--cluster "sbatch --output {cluster.output} --time {cluster.time} --mem {cluster.mem} --cpus-per-task {cluster.cpus}" \
-		> logs/snakemake.log
+		> logs/snakemake.log&
+
+downsample:
+	@nohup snakemake downsample\
+		--jn "atacseq.{jobid}" \
+		-j 999 \
+		--keep-going \
+		--rerun-incomplete \
+		--snakefile src/Snakefile \
+		--configfile config/config.yaml \
+		--cluster-config config/cluster.yaml \
+		--cluster "sbatch --output {cluster.output} --time {cluster.time} --mem {cluster.mem} --cpus-per-task {cluster.cpus}" \
+		> logs/snakemake.log&
