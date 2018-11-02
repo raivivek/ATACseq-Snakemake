@@ -165,7 +165,7 @@ rule all:
             )
             for fastq in iterate_all_fastqs()
         ],
-        # blacklist-filtered master peak files
+        # blacklist-filtered master peak files; peaks w/ FDR < 0.05 are removed too
         [os.path.join(MACS2_DIR, '{}_peaks.master'.format(x)) for x in config['libraries']],
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
@@ -194,7 +194,7 @@ rule fastqc:
     log:
         os.path.join(LOG_DIR, 'fastqc.{fastq_basename}.log')
     shell:
-        'fastqc {input} -o {params.outdir} &> {log}'
+        """fastqc {input} -o {params.outdir} &> {log}"""
 
 
 rule trim:
@@ -210,7 +210,7 @@ rule trim:
         first = os.path.join(TRIM_DIR, '{fastq_basename}.1.trimmed.fastq.gz'),
         second = os.path.join(TRIM_DIR, '{fastq_basename}.2.trimmed.fastq.gz')
     shell:
-        'cta {input.first} {input.second} {output.first} {output.second}'
+        """cta {input.first} {input.second} {output.first} {output.second}"""
 
 
 rule map:
@@ -240,8 +240,18 @@ rule map:
         samtools = os.path.join(LOG_DIR, 'map.samtools.{library}______{readgroup}.log')
     shell:
         """
-        bwa mem -I 200,200,5000 -M -R \'{params.rg}\' -t {threads} {input.index} {input.first} {input.second} 2> {log.bwa} \
-            | samtools sort -m 1g -@ {threads} -O bam -o {output} - 2> {log.samtools}"""
+        bwa mem             \
+            -M              \
+            -R              \
+            \'{params.rg}\' \
+            -I 200,200,5000 \
+            -t {threads}    \
+            {input.index}   \
+            {input.first}   \
+            {input.second}  \
+            2> {log.bwa}    \
+        | samtools sort -m 1g -@ {threads} -O bam -o {output} - 2> {log.samtools}
+        """
 
 
 rule mark_duplicates:
@@ -279,12 +289,11 @@ rule merge:
         bam = os.path.join(MERGE_DIR, '{library}.md.bam'),
         bai = os.path.join(MERGE_DIR, '{library}.md.bam.bai'),
     params:
-        unsorted_merged_bam = temp(os.path.join(MERGE_DIR, '{library}.unsorted.bam')),
-        sort_tmp_prefix = os.path.join(MERGE_DIR, '{library}.sort')
+        unsorted_merged_bam = temp(os.path.join(MERGE_DIR, '{library}.unsorted.bam'))
     shell:
         """
         samtools merge {params.unsorted_merged_bam} {input}
-        ionice -c2 -n7 samtools sort -m 1G -O bam -T {params.sort_tmp_prefix} -o {output.bam} {params.unsorted_merged_bam}
+        ionice -c2 -n7 samtools sort -m 1G -O bam -o {output.bam} {params.unsorted_merged_bam}
         samtools index {output.bam}
         """
 
@@ -354,6 +363,13 @@ rule blacklist_filter:
 
 
 rule ataqv:
+    """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
+    The tools provides many useful metrics such as Fragment Length
+    Distribution, TSS Enrichment, for quality comparison and downstream
+    analysis.
+
+    See: https://github.com/ParkerLab/ataqv
+    """
     input:
         md_bam = os.path.join(MD_DIR, '{library}.md.bam'),
         peaks = os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
@@ -388,9 +404,18 @@ rule ataqv:
 ##
 rule downsample:
     input:
-        [os.path.join(DOWNSAMPLE_BAM_DIR, '{}.downsampled.bam'.format(x)) for x in config['libraries']],
-        [os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x)) for x in config['libraries']],
-        [os.path.join(DOWNSAMPLE_ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']]
+        [
+            os.path.join(DOWNSAMPLE_BAM_DIR, '{}.downsampled.bam'.format(x))
+            for x in config['libraries']
+        ],
+        [
+            os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x))
+            for x in config['libraries']
+        ],
+        [
+            os.path.join(DOWNSAMPLE_ATAQV_DIR, '{}.ataqv.json.gz'.format(x))
+            for x in config['libraries']
+        ]
 
 
 rule __dwnsmpl_bam:
@@ -403,7 +428,7 @@ rule __dwnsmpl_bam:
   threads: 1
   params:
         seed = 2018,
-        depth = config.get('subsample_depth')
+        depth = config.get('subsample_depth') # must be set
   shell:
       # if not supplied; no need to downsampled, just error and exit
       if params.depth is None:
@@ -492,7 +517,9 @@ rule __dwnsmpl_ataqv:
         description = '{library}', # this should really be {description}
         organism = lambda wildcards: get_organism(get_genome(wildcards.library)),
         tss_file = lambda wildcards: get_tss(get_genome(wildcards.library)),
-        excluded_regions_option = lambda wildcards: ' '.join(['--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))]) if get_blacklists(get_genome(wildcards.library)) is not None else ''
+        excluded_regions_option = lambda wildcards: ' '.join([
+            '--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))
+        ]) if not get_blacklists(get_genome(wildcards.library)) else ''
     shell:
         """
         ataqv --peak-file {input.peaks}    \
