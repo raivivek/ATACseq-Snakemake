@@ -22,7 +22,7 @@ to supply ataqv with an autosomal reference file).
 Python >=3.6, and the following software packages:
 
 1. fastqc
-2. [cta](https://github.com/ParkerLab/cta]
+2. [cta](https://github.com/ParkerLab/cta)
 3. BWA
 4. picard (for example, `picard MarkDuplicates`)
 5. samtools
