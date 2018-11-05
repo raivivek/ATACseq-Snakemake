@@ -19,16 +19,16 @@ to supply ataqv with an autosomal reference file).
 
 ## Dependencies
 
-Python >=2.7, and the following software packages:
+Python >=3.6, and the following software packages:
 
 1. fastqc
-2. cta (can be downloaded from the Parker Lab github)
+2. [cta](https://github.com/ParkerLab/cta]
 3. BWA
 4. picard (for example, `picard MarkDuplicates`)
 5. samtools
 6. macs2
 7. bedtools
-8. ataqv
+8. [ataqv](https://github.com/ParkerLab/ataqv)
 
 ## Usage
 
