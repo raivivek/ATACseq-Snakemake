@@ -270,9 +270,8 @@ rule mark_duplicates:
             ASSUME_SORTED=true            \
             METRICS_FILE={params.metrics} \
             VALIDATION_STRINGENCY=LENIENT \
+            CREATE_INDEX=true             \
             TMP_DIR={params.tmp_dir}
-
-        ionice -c2 -n7 samtools index {output.bam}
         """
 
 
