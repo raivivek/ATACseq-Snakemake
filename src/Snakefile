@@ -429,7 +429,7 @@ rule __dwnsmpl_bam:
         seed = 2018,
         depth = config.get('subsample_depth') # must be set
   shell:
-      # if not supplied; no need to downsampled, just error and exit
+      # if not supplied; no need to downsample, just print error and exit
       if params.depth is None:
           sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
           sys.exit(1)
