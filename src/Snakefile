@@ -437,11 +437,7 @@ rule __dwnsmpl_bam:
         seed = 2018,
         depth = config.get('subsample_depth') # must be set
   shell:
-<<<<<<< HEAD
       # if not supplied; no need to downsample, just print error and exit
-=======
-      # if not supplied; no need to downsample, just error and exit
->>>>>>> Fix bugs in make_library_config.py; update blacklist filter rule
       if params.depth is None:
           sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
           sys.exit(1)
