@@ -50,7 +50,7 @@ def parse_fastq_name(f):
     return [library, first_or_second]
 
 
-def create_library_item(fastq):
+def create_library_item():
     """ Parse FASTQ filenames; and return a dictionary with library names
     containing FASTQ files. For example, a library entry looks like
     
@@ -73,14 +73,15 @@ def create_library_item(fastq):
 #            LIBRARIES[lib]['readgroups'] = {}
 #
 #        # generate readgroups
-#        rg = library + '_RG1'
+#        rg = lib + '_RG1'
 #
 #        if rg not in LIBRARIES[lib]['readgroups']:
-#            LIBRARIES[lib]['readgroups'] = []
+#            LIBRARIES[lib]['readgroups'][rg] = []
 #
 #        LIBRARIES[lib]['readgroups'][rg].append(fastq)
 #        LIBRARIES[lib]['readgroups'][rg].sort()
 
 
 if __name__ == "__main__":
+#    create_library_item()
     print(yaml.dump(LIBRARIES, indent=4, default_flow_style=False))

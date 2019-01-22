@@ -58,7 +58,7 @@ MD_DIR = results('mark_duplicates')
 PRUNE_DIR = results('prune')
 MACS2_DIR = results('macs2')
 ATAQV_DIR = results('ataqv')
-MKARV_DIR = results('mkarv')
+MKARV_DIR = results('viewer')
 
 # paths for downsampled data
 DOWNSAMPLE_DIR = results('downsampled')
@@ -348,7 +348,6 @@ rule peaks:
           --keep-dup all \
           --SPMR \
           &> {log}
-
         """
 
 
@@ -356,9 +355,13 @@ rule blacklist_filter:
     input:
         os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
     output:
-        os.path.join(MACS2_DIR, '{library}_peaks.master')
+        os.path.join(MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
+    params:
+        blacklists = lambda wildcards: ' '.join(
+            config.get('blacklist').get(get_genome(wildcards.library))
+        )
     shell:
-        """mappability_filter > {output}"""
+        """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
 
 rule ataqv:
@@ -402,6 +405,11 @@ rule ataqv:
 # 2. (optional) Perform downsampling; call `rule downsample` directly
 ##
 rule downsample:
+    """ Rule that governs downsampling of the processed BAM files.
+
+    Downsampling is desirable when comparing many samples as sequencing-depth
+    can easily factor into observed differences.
+    """
     input:
         [
             os.path.join(DOWNSAMPLE_BAM_DIR, '{}.downsampled.bam'.format(x))
@@ -429,7 +437,11 @@ rule __dwnsmpl_bam:
         seed = 2018,
         depth = config.get('subsample_depth') # must be set
   shell:
+<<<<<<< HEAD
       # if not supplied; no need to downsample, just print error and exit
+=======
+      # if not supplied; no need to downsample, just error and exit
+>>>>>>> Fix bugs in make_library_config.py; update blacklist filter rule
       if params.depth is None:
           sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
           sys.exit(1)
@@ -500,8 +512,12 @@ rule __dwnsmpl_noblacklist:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
     output:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
+    params:
+        blacklists = lambda wildcards: ' '.join(
+            config.get('blacklist').get(get_genome(wildcards.library))
+        )
     shell:
-        """mappability_filter {input} > {output}"""
+        """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
 
 rule __dwnsmpl_ataqv:
