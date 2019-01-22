@@ -3,12 +3,12 @@ pipeline.
 
 ```
 config/
-├── atacseq.generic_data.yaml
 ├── cluster.yaml
 ├── README.md
-└── example_run_2156.yaml
+├── example_run-metadata.yaml
+└── example_library-info.yaml
 ```
 
-* `atacseq.generic_data.yaml`: Contains reference file paths, BWA indices, blacklist files
-* `example_run_2156.yaml`: Library configuration for Run 2156 (example)
+* `example_run-metadata.yaml`: Contains reference file paths, BWA indices, blacklist files
+* `example_library-info.yaml`: Library configuration for Run 2156 (example)
 * `cluster.yaml`: Cluster specificiations for each rule

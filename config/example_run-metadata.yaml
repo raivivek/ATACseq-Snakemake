@@ -1,3 +1,4 @@
+email: "example@johndoe.org"
 blacklist:
   hg19:
     - /lab/data/reference/human/hg19/annot/wgEncodeDukeMapabilityRegionsExcludable.bed.gz

@@ -10,8 +10,8 @@ import sys
 import functools
 
 
-if not config['results']:
-  print("Project ROOT not set. Check config. Exiting.")
+if not config['work']:
+  print("Project 'root'/'work-dir' not set. Check config. Exiting.")
   sys.exit(1)
 
 
@@ -47,7 +47,7 @@ MACS2_GENOME_SIZE = {
 
 ## Generate paths
 #
-results = functools.partial(os.path.join, config['results'])
+results = functools.partial(os.path.join, config['work'])
 
 # target directories; relative to root
 FASTQC_DIR = results('fastqc')
@@ -575,11 +575,11 @@ rule versions:
 
 onerror:
   print("Error: Snakemake aborted!")
-  shell("mail -s 'Snakemake Job Error: See log inside!' {config[email]} < {log}")
+  shell("mail -s 'Snakemake Job Error: See log inside!' {config.get(email)} < {log}")
 
 
 onsuccess:
   print("Success: Snakemake completed!")
-  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config[email]} < {log}")
+  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config.get(email)} < {log}")
 
 # vim: syntax=snakemake
