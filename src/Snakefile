@@ -250,7 +250,7 @@ rule map:
             {input.first}   \
             {input.second}  \
             2> {log.bwa}    \
-        | samtools sort -m 1g -@ {threads} -O bam -o {output} - 2> {log.samtools}
+        | samtools sort -m 2G -@ {threads} -O bam -o {output} - 2> {log.samtools}
         """
 
 
@@ -292,7 +292,7 @@ rule merge:
     shell:
         """
         samtools merge {params.unsorted_merged_bam} {input}
-        ionice -c2 -n7 samtools sort -m 1G -O bam -o {output.bam} {params.unsorted_merged_bam}
+        ionice -c2 -n7 samtools sort -m 2G -O bam -o {output.bam} {params.unsorted_merged_bam}
         samtools index {output.bam}
         """
 
@@ -358,7 +358,7 @@ rule blacklist_filter:
         os.path.join(MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
     params:
         blacklists = lambda wildcards: ' '.join(
-            config.get('blacklist').get(get_genome(wildcards.library))
+            get_blacklists(get_genome(wildcards.library))
         )
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
@@ -449,7 +449,7 @@ rule __dwnsmpl_bam:
           # Compute desired fraction of reads to sub-sample using samtools
           # flagstat.
           #
-          # __TOTAL_READS computes the total number of # "single-reads" in the
+          # NOTE: __TOTAL_READS computes the total number of # "single-reads" in the
           # given input BAM file, and then we compute the fraction to subsample
           # in __FRACTION (requires `bc` tools, POSIX so almost always
           # available). The __FRACTION value already contains a '.' (period) so
@@ -459,10 +459,10 @@ rule __dwnsmpl_bam:
           # Further, simply symlink files if desired depth is more then available
           # number of reads in the file.
           #
-          # Note, (( . )) is not a typo. Using BASH's arithmetic context.
+          # NOTE: (( . )) is not a typo. Using BASH's arithmetic context.
         shell(
         """
-            __TOTAL_READS=$(samtools flagstat {input.bam} | head -n1 | cut -d'+' -f1) \
+            __TOTAL_READS=$(samtools view -cF 0x100 {input.bam}) \
             && if (( $_TOTAL_READS < {params.depth} )); then
                 ln -s {input.bam} {output.bam}
                 ln -s {input.bai} {output.bai}
@@ -514,7 +514,7 @@ rule __dwnsmpl_noblacklist:
         os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
     params:
         blacklists = lambda wildcards: ' '.join(
-            config.get('blacklist').get(get_genome(wildcards.library))
+            get_blacklists(get_genome(wildcards.library))
         )
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
