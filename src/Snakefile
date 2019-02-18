@@ -56,9 +56,11 @@ BWA_DIR = results('bwa')
 MERGE_DIR = results('merge_readgroups')
 MD_DIR = results('mark_duplicates')
 PRUNE_DIR = results('prune')
+BAM2BED_DIR = results('bam2bed')
 MACS2_DIR = results('macs2')
 ATAQV_DIR = results('ataqv')
 MKARV_DIR = results('viewer')
+QC_DIR = results('qc')
 
 # paths for downsampled data
 DOWNSAMPLE_DIR = results('downsampled')
@@ -170,6 +172,7 @@ rule all:
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
         #
+        os.path.join(QC_DIR), 'results.npz'),
         # software versions
         #
         os.path.join(VERSION_DIR, 'fastqc_version.txt'),
@@ -320,9 +323,17 @@ rule prune:
         samtools index {output.bam}
         """
 
-rule peaks:
+rule bam2bed:
     input:
         os.path.join(PRUNE_DIR, '{library}.pruned.bam')
+    output:
+        os.path.join(BED2BAM_DIR, '{library}.pruned.bed')
+    shell:
+        """bedtools bamtobed -i {input} > {output}"""
+
+rule peaks:
+    input:
+        os.path.join(BED2BAM_DIR, '{library}.pruned.bed')
     output:
         os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
     log:
@@ -337,7 +348,7 @@ rule peaks:
           --outdir {params.outdir} \
           -t {input} \
           -n {params.name} \
-          -f BAM \
+          -f BED \
           -g {params.genome_size} \
           --nomodel \
           --shift -100 \
@@ -349,7 +360,6 @@ rule peaks:
           --SPMR \
           &> {log}
         """
-
 
 rule blacklist_filter:
     input:
@@ -399,6 +409,27 @@ rule ataqv:
           {input.md_bam}                   \
           > {log}
         """
+
+rule bam_summary:
+    input:
+        lambda wildcards: [
+            os.path.join(PRUNE_DIR, '{}.pruned.bam').format(library)
+            for library in iterate_all_libraries()
+        ]
+    output:
+        npz = os.path.join(QC_DIR), 'results.npz'),
+        raw = os.path.join(QC_DIR), 'readCounts.tab')
+    params:
+        blacklists = lambda wildcards: ' '.join(
+            get_blacklists(get_genome(wildcards.library))
+        )
+    threads: 2
+    run:
+        files = " ".join(input)
+        shell("""
+            multiBamSummary bins \
+                --bamfiles {files} -o {output.npz} -bl {params.blacklists} \
+                --outRawCounts {output.raw}""")
 
 
 ##
