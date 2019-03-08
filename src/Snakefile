@@ -34,11 +34,13 @@ AUTOSOMAL_REFERENCES = {
     'mm10': ['chr{}'.format(i) for i in range(1, 20)],
     'rn4': ['chr{}'.format(i) for i in range(1, 21)],
     'rn5': ['chr{}'.format(i) for i in range(1, 21)]
+    'rn6': ['chr{}'.format(i) for i in range(1, 21)]
 }
 
 MACS2_GENOME_SIZE = {
     'rn4': 'mm',
     'rn5': 'mm',
+    'rn6': 'mm',
     'mm9': 'mm',
     'mm10': 'mm',
     'hg19': 'hs',
