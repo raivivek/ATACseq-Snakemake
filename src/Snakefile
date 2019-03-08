@@ -50,7 +50,7 @@ MACS2_GENOME_SIZE = {
 
 ## Generate paths
 #
-results = functools.partial(os.path.join, config['work'])
+results = functools.partial(os.path.join, config['results'])
 
 # target directories; relative to root
 FASTQC_DIR = results('fastqc')
@@ -170,12 +170,10 @@ rule all:
             )
             for fastq in iterate_all_fastqs()
         ],
-        # blacklist-filtered master peak files; peaks w/ FDR < 0.05 are removed too
-        [os.path.join(MACS2_DIR, '{}_peaks.master'.format(x)) for x in config['libraries']],
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
         #
-        os.path.join(QC_DIR), 'results.npz'),
+        os.path.join(QC_DIR, 'results.npz'),
         # software versions
         #
         os.path.join(VERSION_DIR, 'fastqc_version.txt'),
@@ -204,7 +202,7 @@ rule fastqc:
 
 
 rule trim:
-    """Use cta to trim adapter sequences"""
+    """Use cta to trim adapter sequences."""
     input:
         first = lambda wildcards: fastq_basename_to_fastq(
             '{}.1.fastq.gz'.format(wildcards.fastq_basename)
@@ -260,15 +258,31 @@ rule map:
         """
 
 
+rule merge:
+    """Readgroups from a library are merged together into a single BAM file."""
+    input:
+        lambda wildcards: [
+            os.path.join(
+                BWA_DIR, '{}______{}.bam'.format(wildcards.library, readgroup)
+            )
+            for readgroup in iterate_library_readgroups(wildcards.library)
+        ]
+    output:
+        bam = os.path.join(MERGE_DIR, '{library}.bam')
+    shell:
+        """ samtools merge {output.bam} {input} """
+
+
 rule mark_duplicates:
     input:
-        bam = os.path.join(BWA_DIR, '{library}______{readgroup}.bam')
+        bam = os.path.join(MERGE_DIR, '{library}.bam')
     output:
-        bam = os.path.join(MD_DIR, '{library}______{readgroup}.md.bam')
+        bam = os.path.join(MD_DIR, '{library}.md.bam')
     params:
-        metrics = os.path.join(MD_DIR, '{library}______{readgroup}.metrics'),
+        metrics = os.path.join(MD_DIR, '{library}.md.metrics'),
         tmp_dir = MD_DIR
     shell:
+        # TODO: Don't use picard wrapper; use native picard.jar invokation
         """
         picard -m 4g MarkDuplicates       \
             I={input.bam}                 \
@@ -281,41 +295,19 @@ rule mark_duplicates:
         """
 
 
-rule merge:
-    """Readgroups from a library are merged together into a single BAM file."""
-    input:
-        lambda wildcards: [
-            os.path.join(
-                MD_DIR, '{}______{}.md.bam'.format(wildcards.library, readgroup)
-            )
-            for readgroup in iterate_library_readgroups(wildcards.library)
-        ]
-    output:
-        bam = os.path.join(MERGE_DIR, '{library}.md.bam'),
-        bai = os.path.join(MERGE_DIR, '{library}.md.bam.bai'),
-    params:
-        unsorted_merged_bam = temp(os.path.join(MERGE_DIR, '{library}.unsorted.bam'))
-    shell:
-        """
-        samtools merge {params.unsorted_merged_bam} {input}
-        ionice -c2 -n7 samtools sort -m 2G -O bam -o {output.bam} {params.unsorted_merged_bam}
-        samtools index {output.bam}
-        """
-
-
 rule prune:
     """Prune all non-autosomal reads, marked duplicates, and unpaired reads
     giving only properly paired and aligned reads above specified alignment
     quality threshold.
     """
     input:
-        bam = os.path.join(MERGE_DIR, '{library}.md.bam'),
-        bai = os.path.join(MERGE_DIR, '{library}.md.bam.bai')
+        bam = os.path.join(MD_DIR, '{library}.md.bam'),
+        bai = os.path.join(MD_DIR, '{library}.md.bam.bai')
     output:
         bam = os.path.join(PRUNE_DIR, '{library}.pruned.bam'),
         bai = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
     params:
-        tmp_dir = MD_DIR,
+        tmp_dir = PRUNE_DIR,
         mapq = 30,
         autosomes = lambda wildcards: get_autosomes(get_genome('{}'.format(wildcards.library)))
     shell:
@@ -376,6 +368,16 @@ rule blacklist_filter:
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
+rule merged_master_peaks:
+    input:
+        lambda wildcards: [
+            os.path.join(MACS2_DIR, '{}_peaks.broadPeak.noblacklist').format(library)
+            for library in iterate_all_libraries()
+        ]
+    output:
+        os.path.join(MACS2_DIR, 'all-libraries.master-peaks.bed')
+    shell:
+        """createMasterPeaks {input} --fdr 0.05 > {output}"""
 
 rule ataqv:
     """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
@@ -415,22 +417,23 @@ rule ataqv:
 
 rule bam_summary:
     input:
-        lambda wildcards: [
+        libs = lambda wildcards: [
             os.path.join(PRUNE_DIR, '{}.pruned.bam').format(library)
             for library in iterate_all_libraries()
-        ]
+        ],
+        peaks = os.path.join(MACS2_DIR, 'all-libraries.master-peaks.bed')
     output:
-        npz = os.path.join(QC_DIR), 'results.npz'),
-        raw = os.path.join(QC_DIR), 'readCounts.tab')
+        npz = os.path.join(QC_DIR, 'results.npz'),
+        raw = os.path.join(QC_DIR, 'readCounts.tab')
     params:
         blacklists = lambda wildcards: ' '.join(
             get_blacklists(get_genome(wildcards.library))
         )
     threads: 2
     run:
-        files = " ".join(input)
+        files = " ".join(input.libs)
         shell("""
-            multiBamSummary bins \
+            multiBamSummary BED-file --BED {input.peaks} \
                 --bamfiles {files} -o {output.npz} -bl {params.blacklists} \
                 --outRawCounts {output.raw}""")
 
@@ -470,7 +473,7 @@ rule __dwnsmpl_bam:
   params:
         seed = 2018,
         depth = config.get('subsample_depth') # must be set
-  shell:
+  run:
       # if not supplied; no need to downsample, just print error and exit
       if params.depth is None:
           sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
@@ -533,7 +536,6 @@ rule __dwnsmpl_call_peaks:
           --keep-dup all \
           --SPMR \
           &> {log}
-
         """
 
 
