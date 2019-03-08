@@ -173,7 +173,7 @@ rule all:
         # ataqv output
         [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
         #
-        os.path.join(QC_DIR, 'results.npz'),
+        os.path.join(QC_DIR, 'bam_correlation.npz'),
         # software versions
         #
         os.path.join(VERSION_DIR, 'fastqc_version.txt'),
@@ -423,8 +423,8 @@ rule bam_summary:
         ],
         peaks = os.path.join(MACS2_DIR, 'all-libraries.master-peaks.bed')
     output:
-        npz = os.path.join(QC_DIR, 'results.npz'),
-        raw = os.path.join(QC_DIR, 'readCounts.tab')
+        npz = os.path.join(QC_DIR, 'bam_correlation.npz'),
+        raw = os.path.join(QC_DIR, 'bam_read-counts.txt')
     params:
         blacklists = lambda wildcards: ' '.join(
             get_blacklists(get_genome(wildcards.library))
