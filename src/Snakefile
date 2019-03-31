@@ -1,91 +1,115 @@
 #! /usr/bin/env python
 #
-# The Parker Lab (theparkerlab.org)
+# (c) The Parker Lab
+# theparkerlab.org
+#
 # University of Michigan, Ann Arbor
 #
 
 import itertools
 import os
 import sys
-import functools
+import shutil
+import subprocess
+from functools import partial
 
 
-if not config['results']:
-  print("Target `results` dir not set. Check config. Exiting.")
+if not config.get("results"):
+  print("`results` dir not set. Check config. Exiting.")
   sys.exit(1)
 
+if not config.get("email"):
+  print("WARN: User email not set. No notifications will be sent!")
 
-## Generic data
-#
+
+##
+# Metadata
+##
 ORGANISMS = {
-    'rn4': 'rat',
-    'rn5': 'rat',
-    'rn6': 'rat',
-    'mm9': 'mouse',
-    'mm10': 'mouse',
-    'hg19': 'human',
-    'hg38': 'human'
+    "rn4": "rat",
+    "rn5": "rat",
+    "rn6": "rat",
+    "mm9": "mouse",
+    "mm10": "mouse",
+    "hg19": "human",
+    "hg38": "human",
 }
 
 AUTOSOMAL_REFERENCES = {
-    'hg19': ['chr{}'.format(i) for i in range(1, 23)],
-    'hg38': ['chr{}'.format(i) for i in range(1, 23)],
-    'mm9': ['chr{}'.format(i) for i in range(1, 20)],
-    'mm10': ['chr{}'.format(i) for i in range(1, 20)],
-    'rn4': ['chr{}'.format(i) for i in range(1, 21)],
-    'rn5': ['chr{}'.format(i) for i in range(1, 21)]
-    'rn6': ['chr{}'.format(i) for i in range(1, 21)]
+    "hg19": [f"chr{i}" for i in range(1, 23)],
+    "hg38": [f"chr{i}" for i in range(1, 23)],
+    "mm9": [f"chr{i}" for i in range(1, 20)],
+    "mm10": [f"chr{i}" for i in range(1, 20)],
+    "rn4": [f"chr{i}" for i in range(1, 21)],
+    "rn5": [f"chr{i}" for i in range(1, 21)],
+    "rn6": [f"chr{i}" for i in range(1, 21)],
 }
 
 MACS2_GENOME_SIZE = {
-    'rn4': 'mm',
-    'rn5': 'mm',
-    'rn6': 'mm',
-    'mm9': 'mm',
-    'mm10': 'mm',
-    'hg19': 'hs',
-    'hg38': 'hs'
+    "rn4": "mm",
+    "rn5": "mm",
+    "rn6": "mm",
+    "mm9": "mm",
+    "mm10": "mm",
+    "hg19": "hs",
+    "hg38": "hs",
 }
 
 
-## Generate paths
-#
-results = functools.partial(os.path.join, config['results'])
+def check_utils_version(outfile):
+    """Check if the tools exists, and if they do, collect their version number.
+    Otherwise, exit with an unpleasant error message."""
+    utils = ["fastqc", "cta", "samtools", "bwa", "macs2", "ataqv", "picard",
+             "bedtools", "pigz"]
 
-# target directories; relative to root
-FASTQC_DIR = results('fastqc')
-TRIM_DIR = results('trim')
-BWA_DIR = results('bwa')
-MERGE_DIR = results('merge_readgroups')
-MD_DIR = results('mark_duplicates')
-PRUNE_DIR = results('prune')
-BAM2BED_DIR = results('bam2bed')
-MACS2_DIR = results('macs2')
-ATAQV_DIR = results('ataqv')
-MKARV_DIR = results('viewer')
-QC_DIR = results('qc')
+    outf, STATUS_CODE = open(outfile, "w"), True
 
-# paths for downsampled data
-DOWNSAMPLE_DIR = results('downsampled')
-DOWNSAMPLE_BAM_DIR = results(DOWNSAMPLE_DIR, 'bam')
-DOWNSAMPLE_MACS2_DIR = results(DOWNSAMPLE_DIR, 'macs2')
-DOWNSAMPLE_ATAQV_DIR = results(DOWNSAMPLE_DIR, 'ataqv')
+    for util in utils:
+        if not shutil.which(util):
+            sys.stderr.write(f"{util} not found! Check $PATH. Exiting.\n")
+            STATUS_CODE = False
+        else:
+            cmd = subprocess.run(util, shell=True, stdout=subprocess.PIPE)
+            outf.write(cmd)
 
-# logs and other stuff
-LOG_DIR = results('logs')
-VERSION_DIR = results('versions')
+    outf.close()
+    return STATUS_CODE
 
 
+##
+# Generate paths
+##
+_results = partial(os.path.join, config["results"])
+_libraries = partial(_results, "libraries")
+_samples = partial(_results, "samples")
+_downsampled = partial(_results, "downsampled")
+_log = partial(_results, "log")
+_versions = partial(_results, "versions")
+
+
+##
 ## Helper functions
-#
+##
+def iterate_all_samples():
+    return set([library["sample"] for library in config["libraries"].values()])
+
+
 def iterate_all_libraries():
-    for library in sorted(config['libraries'].keys()):
-        yield library
+    return sorted(config["libraries"].keys())
 
 
 def iterate_library_readgroups(library):
-    for rg in sorted(config['libraries'][library]['readgroups'].keys()):
-        yield rg
+    return sorted(config["libraries"][library]["readgroups"].keys())
+
+
+def iterate_sample_libraries(sample):
+    for k, v in config["libraries"].items():
+        if v["sample"] == sample:
+            yield k
+
+
+def library_to_sample(library):
+    return config["libraries"][library]["sample"]
 
 
 def readgroup_to_library(readgroup):
@@ -103,7 +127,7 @@ def iterate_all_readgroups():
 
 def list_readgroup_fastqs(readgroup):
     library = readgroup_to_library(readgroup)
-    return config['libraries'][library]['readgroups'][readgroup]
+    return config["libraries"][library]["readgroups"][readgroup]
 
 
 def iterate_all_fastqs():
@@ -116,23 +140,28 @@ def fastq_basename_to_fastq(fastq_basename):
     for fastq in iterate_all_fastqs():
         if fastq_basename == os.path.basename(fastq):
             return fastq
-    sys.stderr.write(
-        'ERROR: Could not find FASTQ corresponding to {}; exiting.\n'.format(
-            fastq_basename
-        )
+    print(
+        f"FATAL: Could not find FASTQ file for {fastq_basename}; Exiting.",
+        file=sys.stderr
     )
     sys.exit(1)
 
 
-def fastq_to_trimmed_fastq(fastq):
-    trimmed_fastq_basename = os.path.basename(fastq).replace(
-        '.fastq.gz', '.trimmed.fastq.gz'
+def fastq_to_clipped_fastq(path, fastq):
+    clipped_fastq_basename = os.path.basename(fastq).replace(
+        ".fastq.gz", ".cl.fastq.gz"
     )
-    return os.path.join(TRIM_DIR, trimmed_fastq_basename)
+    return os.path.join(path, clipped_fastq_basename)
 
 
-def get_genome(library):
+def get_library_genome(library):
     return config['libraries'][library]['genome']
+
+
+def get_sample_genome(sample):
+    for lib in iterate_all_libraries():
+        if config['libraries'][lib]['sample'] == sample:
+            return config['libraries'][lib]['genome']
 
 
 def get_organism(genome):
@@ -144,59 +173,62 @@ def get_autosomes(genome):
 
 
 def get_bwa_index(genome):
-    return config['bwa_index'][genome]
+    return config["bwa_index"][genome]
 
 
 def get_tss(genome):
-    return config['tss'][genome]
+    return config["tss"][genome]
+
+
+def get_chrom_sizes(genome):
+    return config["chrom_sizes"][genome]
 
 
 def get_whitelists(genome):
-    return config['whitelist'].get(genome)
+    return config["whitelist"].get(genome)
 
 
 def get_blacklists(genome):
-    return config['blacklist'].get(genome)
+    return config["blacklist"].get(genome)
 
 
-# Now the pipeline itself
+def strip_ext(fastq):
+    return os.path.basename(fastq).replace(".fastq.gz", "")
 
-rule all:
+##
+## Pipeline
+##
+##   `rule all` is at the end.
+##
+
+rule make_libraries:
     input:
-        # fastqc output
-        [
-            os.path.join(FASTQC_DIR, '{}_fastqc.zip'.format(
-                os.path.basename(fastq).replace('.fastq.gz', ''))
-            )
-            for fastq in iterate_all_fastqs()
-        ],
-        # ataqv output
-        [os.path.join(ATAQV_DIR, '{}.ataqv.json.gz'.format(x)) for x in config['libraries']],
-        #
-        os.path.join(QC_DIR, 'bam_correlation.npz'),
-        # software versions
-        #
-        os.path.join(VERSION_DIR, 'fastqc_version.txt'),
-        os.path.join(VERSION_DIR, 'cta_version.txt'),
-        os.path.join(VERSION_DIR, 'bwa_version.txt'),
-        os.path.join(VERSION_DIR, 'picard_version.txt'),
-        os.path.join(VERSION_DIR, 'samtools_version.txt'),
-        os.path.join(VERSION_DIR, 'macs2_version.txt'),
-        os.path.join(VERSION_DIR, 'bedtools_version.txt'),
-        os.path.join(VERSION_DIR, 'ataqv_version.txt')
+        expand(
+            _libraries("fastqc", "{fastq}_fastqc.zip"),
+            fastq=[strip_ext(x) for x in iterate_all_fastqs()]
+        ),
+        expand(
+            _libraries("fastqc_post-clip", "{fastq}_fastqc.zip"),
+            fastq=[strip_ext(x) for x in iterate_all_fastqs()]
+        ),
+        expand(
+            _libraries("ataqv", "{library}.ataqv.json.gz"),
+            library=iterate_all_libraries()
+        ),
+        _libraries("macs2", "all-libraries.master-peaks.bed"),
 
 
-rule fastqc:
+rule raw_fastqc:
     input:
         lambda wildcards: fastq_basename_to_fastq(
-            '{}.fastq.gz'.format(wildcards.fastq_basename)
+            f"{wildcards.fastq_basename}.fastq.gz"
         )
     output:
-        os.path.join(FASTQC_DIR, '{fastq_basename}_fastqc.zip')
+        _libraries("fastqc", "{fastq_basename}_fastqc.zip")
     params:
-        outdir=FASTQC_DIR
+        outdir = _libraries("fastqc")
     log:
-        os.path.join(LOG_DIR, 'fastqc.{fastq_basename}.log')
+        _log("fastqc.{fastq_basename}.log")
     shell:
         """fastqc {input} -o {params.outdir} &> {log}"""
 
@@ -204,17 +236,60 @@ rule fastqc:
 rule trim:
     """Use cta to trim adapter sequences."""
     input:
-        first = lambda wildcards: fastq_basename_to_fastq(
-            '{}.1.fastq.gz'.format(wildcards.fastq_basename)
+        R1 = lambda wildcards: fastq_basename_to_fastq(
+            f"{wildcards.fastq_basename}.R1.fastq.gz"
         ),
-        second = lambda wildcards: fastq_basename_to_fastq(
-            '{}.2.fastq.gz'.format(wildcards.fastq_basename)
+        R2 = lambda wildcards: fastq_basename_to_fastq(
+            f"{wildcards.fastq_basename}.R2.fastq.gz"
         )
     output:
-        first = os.path.join(TRIM_DIR, '{fastq_basename}.1.trimmed.fastq.gz'),
-        second = os.path.join(TRIM_DIR, '{fastq_basename}.2.trimmed.fastq.gz')
+        R1 = _libraries("trimmed", "{fastq_basename}.R1.tr.fastq.gz"),
+        R2 = _libraries("trimmed", "{fastq_basename}.R2.tr.fastq.gz")
     shell:
-        """cta {input.first} {input.second} {output.first} {output.second}"""
+        """cta {input.R1} {input.R2} {output.R1} {output.R2}"""
+
+
+rule clip_reads:
+    """Optionally, clip the reads for a given list of samples"""
+    input:
+        R1 = _libraries("trimmed", "{fastq_basename}.R1.tr.fastq.gz"),
+        R2 = _libraries("trimmed", "{fastq_basename}.R2.tr.fastq.gz")
+    output:
+        R1 = _libraries("clipped", "{fastq_basename}.R1.cl.fastq.gz"),
+        R2 = _libraries("clipped", "{fastq_basename}.R2.cl.fastq.gz")
+    params:
+        libraries = config.get('params_clip_samples'),
+        length = config.get("params_clip_length")
+    run:
+        #
+        ## If FASTQ needs clipping, use cutadapt otherwise simply symlink
+        #
+        if wildcards.fastq_basename in params.libraries:
+            shell(
+                "cutadapt -u {params.length} -U {params.length} \
+                -o {output.R1} -p {output.R2} {input.R1} {input.R2}"
+            )
+        else:
+            shell(
+                "ln -s {input.R1} {output.R1} \
+                    && ln -s {input.R2} {output.R2}"
+            )
+
+
+rule post_fastqc:
+    """Run FastQC after trimming and clipping"""
+    input:
+        _libraries("clipped", "{fastq_basename}.cl.fastq.gz"),
+    output:
+        _libraries("fastqc_post-clip", "{fastq_basename}_fastqc.zip")
+    params:
+        outdir = _libraries("fastqc_post-clip")
+    log:
+        _log("fastqc.{fastq_basename}.log")
+    shell:
+        """
+        fastqc {input} -o {params.outdir} &> {log}
+        """
 
 
 rule map:
@@ -227,71 +302,79 @@ rule map:
     analysis uses larger size fragments.
     """
     input:
-        first = lambda wildcards: fastq_to_trimmed_fastq(
+        R1 = lambda wildcards: fastq_to_clipped_fastq(
+            _libraries("clipped"),
             list_readgroup_fastqs(wildcards.readgroup)[0]
         ),
-        second = lambda wildcards: fastq_to_trimmed_fastq(
+        R2 = lambda wildcards: fastq_to_clipped_fastq(
+            _libraries("clipped"),
             list_readgroup_fastqs(wildcards.readgroup)[1]
         ),
-        index = lambda wildcards: get_bwa_index(get_genome(wildcards.library))
+        index = lambda wildcards: get_bwa_index(get_library_genome(wildcards.library))
     output:
-        os.path.join(BWA_DIR, '{library}______{readgroup}.bam')
+        _libraries("bwa", "{library}______{readgroup}.bam")
     params:
-        rg = '\\t'.join(['@RG', 'ID:{}'.format('{readgroup}'), 'LB:{}'.format('{library}')])
+        rg = "\\t".join(["@RG", "ID:{readgroup}", "LB:{library}"])
     threads: 4
     log:
-        bwa = os.path.join(LOG_DIR, 'map.bwa.{library}______{readgroup}.log'),
-        samtools = os.path.join(LOG_DIR, 'map.samtools.{library}______{readgroup}.log')
+        bwa = _log("map.bwa.{library}______{readgroup}.log"),
+        samtools = _log("map.samtools.{library}______{readgroup}.log")
     shell:
         """
         bwa mem             \
             -M              \
             -R              \
-            \'{params.rg}\' \
+            \"{params.rg}\" \
             -I 200,200,5000 \
             -t {threads}    \
             {input.index}   \
-            {input.first}   \
-            {input.second}  \
+            {input.R1}   \
+            {input.R2}  \
             2> {log.bwa}    \
         | samtools sort -m 2G -@ {threads} -O bam -o {output} - 2> {log.samtools}
         """
 
 
-rule merge:
-    """Readgroups from a library are merged together into a single BAM file."""
+rule merge_readgroups:
+    """Readgroups for a library are merged together into a single BAM file."""
     input:
         lambda wildcards: [
-            os.path.join(
-                BWA_DIR, '{}______{}.bam'.format(wildcards.library, readgroup)
-            )
+            _libraries("bwa", f"{wildcards.library}______{readgroup}.bam")
             for readgroup in iterate_library_readgroups(wildcards.library)
         ]
     output:
-        bam = os.path.join(MERGE_DIR, '{library}.bam')
+        _libraries("merge_readgroups", "{library}.bam")
+    threads: 2
     shell:
-        """ samtools merge {output.bam} {input} """
+        """samtools merge -@{threads} {output} {input}"""
 
 
 rule mark_duplicates:
+    """Use picard tools to mark duplicates for each library. Readgroups are
+    merged in previous step as Picard can honor Readgroup tag and remove
+    duplicates in a read-group aware manner."""
     input:
-        bam = os.path.join(MERGE_DIR, '{library}.bam')
+        bam = _libraries("merge_readgroups", "{library}.bam")
     output:
-        bam = os.path.join(MD_DIR, '{library}.md.bam')
+        bam = _libraries("mark_duplicates", "{library}.md.bam"),
+        bai = _libraries("mark_duplicates", "{library}.md.bam.bai")
     params:
-        metrics = os.path.join(MD_DIR, '{library}.md.metrics'),
-        tmp_dir = MD_DIR
+        metrics = _libraries("mark_duplicates", "{library}.md.metrics"),
+        tmp_dir = _libraries("mark_duplicates")
+    log:
+        _log("{library}.md.log")
     shell:
-        # TODO: Don't use picard wrapper; use native picard.jar invokation
+        # TODO: Don"t use picard wrapper; use native picard.jar invokation
         """
-        picard -m 4g MarkDuplicates       \
+        picard -m 8G MarkDuplicates       \
             I={input.bam}                 \
             O={output.bam}                \
             ASSUME_SORTED=true            \
             METRICS_FILE={params.metrics} \
             VALIDATION_STRINGENCY=LENIENT \
-            CREATE_INDEX=true             \
-            TMP_DIR={params.tmp_dir}
+            TMP_DIR={params.tmp_dir} &> {log}
+
+        samtools index {output.bam}
         """
 
 
@@ -301,15 +384,15 @@ rule prune:
     quality threshold.
     """
     input:
-        bam = os.path.join(MD_DIR, '{library}.md.bam'),
-        bai = os.path.join(MD_DIR, '{library}.md.bam.bai')
+        bam = _libraries("mark_duplicates", "{library}.md.bam"),
+        bai = _libraries("mark_duplicates", "{library}.md.bam.bai")
     output:
-        bam = os.path.join(PRUNE_DIR, '{library}.pruned.bam'),
-        bai = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
+        bam = _libraries("pruned", "{library}.pd.bam"),
+        bai = _libraries("pruned", "{library}.pd.bam.bai")
     params:
-        tmp_dir = PRUNE_DIR,
-        mapq = 30,
-        autosomes = lambda wildcards: get_autosomes(get_genome('{}'.format(wildcards.library)))
+        tmp_dir = _libraries("pruned"),
+        mapq = config.get("params_prune_mapq", 30),
+        autosomes = lambda wildcards: get_autosomes(get_library_genome(wildcards.library))
     shell:
         """
         samtools view -b -h -f 3 -F 4 -F 8 -F 256 -F 1024 -F 2048 \
@@ -318,25 +401,28 @@ rule prune:
         samtools index {output.bam}
         """
 
+
 rule bam2bed:
     input:
-        os.path.join(PRUNE_DIR, '{library}.pruned.bam')
+        _libraries("pruned", "{library}.pd.bam")
     output:
-        os.path.join(BED2BAM_DIR, '{library}.pruned.bed')
+        _libraries("bam2bed", "{library}.pd.bed")
     shell:
         """bedtools bamtobed -i {input} > {output}"""
 
+
 rule peaks:
     input:
-        os.path.join(BED2BAM_DIR, '{library}.pruned.bed')
+        _libraries("bam2bed", "{library}.pd.bed")
     output:
-        os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
-    log:
-        os.path.join(MACS2_DIR, '{library}.macs2.out')
+        peaks = _libraries("macs2", "{library}_peaks.broadPeak"),
+        bdg = _libraries("macs2", "{library}_treat_pileup.bdg.gz"),
     params:
-        name = '{library}',
-        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
-        outdir = MACS2_DIR
+        name = "{library}",
+        outdir = _libraries("macs2"),
+        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_library_genome(wildcards.library)]
+    log:
+        _log("{library}.macs2.out")
     shell:
         """
         macs2 callpeak \
@@ -354,30 +440,37 @@ rule peaks:
           --keep-dup all \
           --SPMR \
           &> {log}
+
+        pigz {wildcards.library}_treat_pileup.bdg
         """
+
 
 rule blacklist_filter:
     input:
-        os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
+        _libraries("macs2", "{library}_peaks.broadPeak")
     output:
-        os.path.join(MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
+        _libraries("macs2", "{library}_peaks.broadPeak.noblacklist")
     params:
-        blacklists = lambda wildcards: ' '.join(
-            get_blacklists(get_genome(wildcards.library))
+        blacklists = lambda wildcards: " ".join(
+            get_blacklists(get_library_genome(wildcards.library))
         )
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
+
 rule merged_master_peaks:
     input:
         lambda wildcards: [
-            os.path.join(MACS2_DIR, '{}_peaks.broadPeak.noblacklist').format(library)
+            _libraries("macs2", f"{library}_peaks.broadPeak.noblacklist")
             for library in iterate_all_libraries()
         ]
     output:
-        os.path.join(MACS2_DIR, 'all-libraries.master-peaks.bed')
+        _libraries("macs2", "all-libraries.master-peaks.bed")
+    params:
+        fdr = config.get("params_macs2_fdr", 0.05)
     shell:
-        """createMasterPeaks {input} --fdr 0.05 > {output}"""
+        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
+
 
 rule ataqv:
     """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
@@ -388,58 +481,187 @@ rule ataqv:
     See: https://github.com/ParkerLab/ataqv
     """
     input:
-        md_bam = os.path.join(MD_DIR, '{library}.md.bam'),
-        peaks = os.path.join(MACS2_DIR, '{library}_peaks.broadPeak')
+        bam = _libraries("mark_duplicates", "{library}.md.bam"),
+        peaks = _libraries("macs2", "{library}_peaks.broadPeak.noblacklist")
     output:
-        metrics = os.path.join(ATAQV_DIR, '{library}.ataqv.json.gz'),
-    log:
-        os.path.join(ATAQV_DIR, '{library}.ataqv.out')
+        _libraries("ataqv", "{library}.ataqv.json.gz")
     params:
-        name = '{library}',
-        description = '{library}', # this should really be {description}
-        organism = lambda wildcards: get_organism(get_genome(wildcards.library)),
-        tss = lambda wildcards: get_tss(get_genome(wildcards.library)),
-        excluded_regions_option = lambda wildcards: ' '.join([
-            '--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))
-        ]) if not get_blacklists(get_genome(wildcards.library)) else ''
+        name = "{library}",
+        description = "{library}",
+        organism = lambda wildcards: get_organism(get_library_genome(wildcards.library)),
+        tss = lambda wildcards: get_tss(get_library_genome(wildcards.library)),
+    log:
+        _log("{library}.ataqv.log")
     shell:
         """
         ataqv --peak-file {input.peaks}    \
           --name {params.description}      \
-          --metrics-file {output.metrics}  \
-          {params.excluded_regions_option} \
+          --metrics-file {output}          \
           --tss-file {params.tss}          \
           --ignore-read-groups             \
           {params.organism}                \
-          {input.md_bam}                   \
+          {input.bam}                      \
           > {log}
         """
 
-rule bam_summary:
+##
+## Process Samples
+##
+#:
+#: Samples are often run as multiple libraries. We merge libraries and analyze them
+#: as single samples. If any libraries are removed from the analysis after QC,
+#: the rules below should be be updated to reflect those omissions.
+#:
+
+rule make_samples:
     input:
-        libs = lambda wildcards: [
-            os.path.join(PRUNE_DIR, '{}.pruned.bam').format(library)
-            for library in iterate_all_libraries()
-        ],
-        peaks = os.path.join(MACS2_DIR, 'all-libraries.master-peaks.bed')
-    output:
-        npz = os.path.join(QC_DIR, 'bam_correlation.npz'),
-        raw = os.path.join(QC_DIR, 'bam_read-counts.txt')
-    params:
-        blacklists = lambda wildcards: ' '.join(
-            get_blacklists(get_genome(wildcards.library))
+        expand(
+            _samples("ataqv", "{sample}.ataqv.json.gz"),
+            sample=iterate_all_samples()
+        ),
+        _samples("macs2", "all-samples.master-peaks.bed")
+
+
+rule merge_libraries:
+    input:
+        lambda wildcards: expand(
+            _libraries("pruned", "{library}.pd.bam"),
+            library=iterate_sample_libraries(wildcards.sample)
         )
+    output:
+        bam = _samples("merge_libraries", "{sample}.bam"),
+        bai = _samples("merge_libraries", "{sample}.bam.bai")
     threads: 2
-    run:
-        files = " ".join(input.libs)
-        shell("""
-            multiBamSummary BED-file --BED {input.peaks} \
-                --bamfiles {files} -o {output.npz} -bl {params.blacklists} \
-                --outRawCounts {output.raw}""")
+    shell:
+        """
+        samtools merge -@{threads} - {input} \
+            | samtools sort -m 4G -O bam -o {output} - 2> /dev/null
+
+        samtools index -@{threads} {output.bam}
+
+        samtools flagstat -@{threads} {output.bam} > {output.bam}.flagstat
+        """ 
+
+
+rule sample_bam2bed:
+    input:
+        _samples("merge_libraries", "{sample}.bam")
+    output:
+        _samples("bam2bed", "{sample}.bed")
+    shell:
+        """bedtools bamtobed -i {input} > {output}"""
+
+
+rule sample_peaks:
+    input:
+        _samples("bam2bed", "{sample}.bed")
+    output:
+        peaks = _samples("macs2", "{sample}_peaks.broadPeak"),
+        bdg = _samples("macs2", "{sample}_treat_pileup.bdg.gz"),
+    params:
+        name = "{sample}",
+        outdir = _samples("macs2"),
+        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_sample_genome(wildcards.sample)]
+    log:
+        _log("{sample}.macs2.out")
+    shell:
+        """
+        macs2 callpeak \
+          --outdir {params.outdir} \
+          -t {input} \
+          -n {params.name} \
+          -f BED \
+          -g {params.genome_size} \
+          --nomodel \
+          --shift -100 \
+          --extsize 200 \
+          --seed 2018 \
+          -B \
+          --broad \
+          --keep-dup all \
+          --SPMR \
+          &> {log}
+
+        pigz {wildcards.sample}_treat_pileup.bdg
+        """
+
+
+rule sample_noblacklist:
+    input:
+        _samples("macs2", "{sample}_peaks.broadPeak")
+    output:
+        _samples("macs2", "{sample}_peaks.broadPeak.noblacklist")
+    params:
+        blacklists = lambda wildcards: " ".join(
+            get_blacklists(get_sample_genome(wildcards.sample))
+        )
+    shell:
+        """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
+
+
+rule sample_merged_master_peaks:
+    input:
+        expand(
+            _samples("macs2", "{sample}_peaks.broadPeak.noblacklist"),
+            sample=iterate_all_samples()
+        )
+    output:
+        _samples("macs2", "all-samples.master-peaks.bed")
+    params:
+        fdr = config.get("params_macs2_fdr", 0.05)
+    shell:
+        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
+
+
+rule sample_ataqv:
+    """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
+    The tools provides many useful metrics such as Fragment Length
+    Distribution, TSS Enrichment, for quality comparison and downstream
+    analysis.
+
+    See: https://github.com/ParkerLab/ataqv
+    """
+    input:
+        bam = _samples("merge_libraries", "{sample}.bam"),
+        peaks = _samples("macs2", "{sample}_peaks.broadPeak.noblacklist")
+    output:
+        _samples("ataqv", "{sample}.ataqv.json.gz")
+    params:
+        name = "{sample}",
+        description = "{sample}",
+        organism = lambda wildcards: get_organism(get_sample_genome(wildcards.sample)),
+        tss = lambda wildcards: get_tss(get_sample_genome(wildcards.sample))
+    log:
+        _log("{sample}.ataqv.log")
+    shell:
+        """
+        ataqv --peak-file {input.peaks}    \
+          --name {params.description}      \
+          --metrics-file {output}          \
+          --tss-file {params.tss}          \
+          --ignore-read-groups             \
+          {params.organism}                \
+          {input.bam}                      \
+          > {log}
+        """
+
+
+rule sample_bigwig:
+    input:
+        _samples("macs2", "{sample}_treat_pileup.bdg.gz"),
+    output:
+        _samples("gb", "{sample}.bw")
+    params:
+        sizes = lambda wildcards: get_chrom_sizes(get_sample_genome(wildcards.sample))
+    shell:
+        """bdgTobw {input} {params.sizes} {output}"""
+
+
+#rule sample_track_lines:
 
 
 ##
-# 2. (optional) Perform downsampling; call `rule downsample` directly
+## 3. (Optional) Perform downsampling; call `rule downsample` directly
 ##
 rule downsample:
     """ Rule that governs downsampling of the processed BAM files.
@@ -448,31 +670,25 @@ rule downsample:
     can easily factor into observed differences.
     """
     input:
-        [
-            os.path.join(DOWNSAMPLE_BAM_DIR, '{}.downsampled.bam'.format(x))
-            for x in config['libraries']
-        ],
-        [
-            os.path.join(DOWNSAMPLE_MACS2_DIR, '{}_peaks.broadPeak.noblacklist'.format(x))
-            for x in config['libraries']
-        ],
-        [
-            os.path.join(DOWNSAMPLE_ATAQV_DIR, '{}.ataqv.json.gz'.format(x))
-            for x in config['libraries']
-        ]
+        rules.make_samples.input,
+        expand(
+            _downsampled("ataqv", "{sample}.ataqv.json.gz"),
+            sample=iterate_all_samples()
+        ),
+        _downsampled("macs2", "all-samples.master-peaks.bed")
 
 
-rule __dwnsmpl_bam:
+rule downsample_bam:
   input:
-        bam = os.path.join(PRUNE_DIR, '{library}.pruned.bam'),
-        bai = os.path.join(PRUNE_DIR, '{library}.pruned.bam.bai')
+        rules.merge_libraries.output
   output:
-        bam = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam'),
-        bai = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam.bai')
+        bam = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam"),
+        bai = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam.bai"),
+        flagstat = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam.flagstat")
   threads: 1
   params:
-        seed = 2018,
-        depth = config.get('subsample_depth') # must be set
+        seed = config.get('params_seed', 2018),
+        depth = config.get("params_downsample_depth")
   run:
       # if not supplied; no need to downsample, just print error and exit
       if params.depth is None:
@@ -485,14 +701,14 @@ rule __dwnsmpl_bam:
           # NOTE: __TOTAL_READS computes the total number of # "single-reads" in the
           # given input BAM file, and then we compute the fraction to subsample
           # in __FRACTION (requires `bc` tools, POSIX so almost always
-          # available). The __FRACTION value already contains a '.' (period) so
+          # available). The __FRACTION value already contains a "." (period) so
           # we omit that in samtools call. `scale=3` in `bc -l` limits the number
           # of decimal places to 3.
           #
           # Further, simply symlink files if desired depth is more then available
           # number of reads in the file.
           #
-          # NOTE: (( . )) is not a typo. Using BASH's arithmetic context.
+          # NOTE: (( . )) is not a typo. Using BASH"s arithmetic context.
         shell(
         """
             __TOTAL_READS=$(samtools view -cF 0x100 {input.bam}) \
@@ -503,29 +719,31 @@ rule __dwnsmpl_bam:
                 __FRACTION=$(bc -l <<< "scale=3; {params.depth}/$__TOTAL_READS") \
                 && samtools view -@ {threads} -b -h -s {params.seed}$__FRACTION {input.bam} -o {output.bam}
                 samtools index {output.bam}
+                samtools flagstat {output.bam} > {output.flagstat}
             fi
         """
         )
-       
 
-rule __dwnsmpl_call_peaks:
+
+rule downsample_call_peaks:
     input:
-        os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam')
+        _downsampled("merge_libraries", "{sample}.dwnsmpl.bam"),
     output:
-        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
-    log:
-        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}.macs2.out'),
+        peaks = _downsampled("macs2", "{sample}_peaks.broadPeak"),
+        bdg = _downsampled("macs2", "{sample}_treat_pileup.bdg.gz"),
     params:
-        name = '{library}',
-        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_genome(wildcards.library)],
-        outdir = DOWNSAMPLE_MACS2_DIR
+        name = "{sample}",
+        outdir = _samples("macs2"),
+        genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_sample_genome(wildcards.sample)]
+    log:
+        _log("{sample}.dwnsmpl.macs2.out")
     shell:
         """
         macs2 callpeak \
           --outdir {params.outdir} \
           -t {input} \
           -n {params.name} \
-          -f BAM \
+          -f BED \
           -g {params.genome_size} \
           --nomodel \
           --shift -100 \
@@ -536,43 +754,63 @@ rule __dwnsmpl_call_peaks:
           --keep-dup all \
           --SPMR \
           &> {log}
+
+        pigz {wildcards.sample}_treat_pileup.bdg
         """
 
 
-rule __dwnsmpl_noblacklist:
+rule downsample_noblacklist:
     input:
-        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+        _downsampled("macs2", "{sample}_peaks.broadPeak")
     output:
-        os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak.noblacklist')
+        _downsampled("macs2", "{sample}_peaks.broadPeak.noblacklist")
     params:
-        blacklists = lambda wildcards: ' '.join(
-            get_blacklists(get_genome(wildcards.library))
+        blacklists = lambda wildcards: " ".join(
+            get_blacklists(get_sample_genome(wildcards.sample))
         )
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
 
-rule __dwnsmpl_ataqv:
+rule downsample_master_peaks:
     input:
-        bam = os.path.join(DOWNSAMPLE_BAM_DIR, '{library}.downsampled.bam'),
-        peaks = os.path.join(DOWNSAMPLE_MACS2_DIR, '{library}_peaks.broadPeak')
+        lambda wildcards: [
+            _downsampled("macs2", f"{sample}_peaks.broadPeak.noblacklist")
+            for sample in iterate_all_samples()
+        ]
     output:
-        metrics = os.path.join(DOWNSAMPLE_ATAQV_DIR, '{library}.ataqv.json.gz'),
-        stdout_destination = os.path.join(DOWNSAMPLE_ATAQV_DIR, '{library}.ataqv.out')
+        _downsampled("macs2", "all-samples.master-peaks.bed")
     params:
-        name = '{library}',
-        description = '{library}', # this should really be {description}
-        organism = lambda wildcards: get_organism(get_genome(wildcards.library)),
-        tss_file = lambda wildcards: get_tss(get_genome(wildcards.library)),
-        excluded_regions_option = lambda wildcards: ' '.join([
-            '--excluded-region-file {}'.format(x) for x in get_blacklists(get_genome(wildcards.library))
-        ]) if not get_blacklists(get_genome(wildcards.library)) else ''
+        fdr = config.get("params_macs2_fdr", 0.05)
+    shell:
+        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
+
+
+rule downsample_ataqv:
+    """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
+    The tools provides many useful metrics such as Fragment Length
+    Distribution, TSS Enrichment, for quality comparison and downstream
+    analysis.
+
+    See: https://github.com/ParkerLab/ataqv
+    """
+    input:
+        bam = _downsampled("merge_libraries", "{sample}.dwnsmpl.bam"),
+        peaks = _downsampled("macs2", "{sample}_peaks.broadPeak.noblacklist")
+    output:
+        _downsampled("ataqv", "{sample}.ataqv.json.gz")
+    params:
+        name = "{sample}",
+        description = "{sample}",
+        organism = lambda wildcards: get_organism(get_sample_genome(wildcards.sample)),
+        tss = lambda wildcards: get_tss(get_sample_genome(wildcards.sample))
+    log:
+        _log("{sample}.dwnsmpl.ataqv.log")
     shell:
         """
         ataqv --peak-file {input.peaks}    \
           --name {params.description}      \
-          --metrics-file {output.metrics}  \
-          {params.excluded_regions_option} \
+          --metrics-file {output}          \
           --tss-file {params.tss}          \
           --ignore-read-groups             \
           {params.organism}                \
@@ -581,29 +819,35 @@ rule __dwnsmpl_ataqv:
         """
 
 
+rule downsample_bigwig:
+    input:
+        _downsampled("macs2", "{sample}_treat_pileup.bdg.gz"),
+    output:
+        _downsampled("gb", "{sample}.bw")
+    params:
+        sizes = lambda wildcards: get_chrom_sizes(get_sample_genome(wildcards.sample))
+    shell:
+        """bdgTobw {input} {params.sizes} {output}"""
 ##
 ## debug info
 ##
 
 rule versions:
     output:
-        fastqc_version = os.path.join(VERSION_DIR, 'fastqc_version.txt'),
-        cta_version = os.path.join(VERSION_DIR, 'cta_version.txt'),
-        bwa_version = os.path.join(VERSION_DIR, 'bwa_version.txt'),
-        picard_version = os.path.join(VERSION_DIR, 'picard_version.txt'),
-        samtools_version = os.path.join(VERSION_DIR, 'samtools_version.txt'),
-        macs2_version = os.path.join(VERSION_DIR, 'macs2_version.txt'),
-        bedtools_version = os.path.join(VERSION_DIR, 'bedtools_version.txt'),
-        ataqv_version = os.path.join(VERSION_DIR, 'ataqv_version.txt')
+        _versions("version.txt")
     run:
-        shell('fastqc --version &> {output.fastqc_version} || echo ""')
-        shell('cta --version &> {output.cta_version} || echo ""')
-        shell('bwa &> {output.bwa_version} || echo ""')
-        shell('picard MarkDuplicates --version &> {output.picard_version} || echo ""')
-        shell('samtools --version &> {output.samtools_version} || echo ""')
-        shell('macs2 --version &> {output.macs2_version} || echo ""')
-        shell('bedtools --version &> {output.bedtools_version} || echo ""')
-        shell('ataqv --version &> {output.ataqv_version} || echo ""')
+        check_utils_version(output)
+
+##
+## rule all
+##
+
+rule all:
+    input:
+        rules.versions.output,
+        rules.make_libraries.input,
+        rules.make_samples.input,
+        rules.downsample.input
 
 ##
 ## notification
@@ -611,11 +855,11 @@ rule versions:
 
 onerror:
   print("Error: Snakemake aborted!")
-  shell("mail -s 'Snakemake Job Error: See log inside!' {config.get(email)} < {log}")
+  shell("mail -s 'Snakemake Job Error: See log inside!' {config.get('email')} < {log}")
 
 
 onsuccess:
   print("Success: Snakemake completed!")
-  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config.get(email)} < {log}")
+  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config.get('email')} < {log}")
 
-# vim: syntax=snakemake
+# vim: syntax=python

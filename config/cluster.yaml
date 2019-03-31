@@ -1,25 +1,35 @@
 __default__:
-    mem: 6000
-    cpus: 1
-    name: JOBNAME.{rule}.{wildcards}
-    output: logs/{rule}.{wildcards}.out
-    time: 10:00:00
+  mem: "4G"
+  cpus: "1"
+  name: "JOBNAME.{rule}.{wildcards}"
+  output: "logs/{rule}.{wildcards}.out"
+  time: "4:00:00"
 
 map:
-    cpus: 4
-    mem: 15000
+  cpus: "4"
+  mem: "15G"
+  time: "2-0:00:00"
+
+merge_readgroups:
+  cpus: "2"
 
 mark_duplicates:
-    mem: 15000
+  mem: "8G"
+  time: "8:00:00"
 
-merge:
-    mem: 5000
+merge_libraries:
+  cpus: "2"
 
-prune:
-    mem: 4000
+bam2bed:
+  time: "1:00:00"
 
-trim:
-    mem: 5000
+blacklist_filter:
+  mem: "100M"
+  time: "10:00"
+
+merge_master_peaks:
+  mem: "100M"
+  time: "10:00"
 
 versions:
-    mem: 500
+  mem: "100M"
