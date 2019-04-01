@@ -6,10 +6,10 @@
 # University of Michigan, Ann Arbor
 #
 
-import itertools
 import os
 import sys
 import shutil
+import itertools
 import subprocess
 from functools import partial
 
@@ -66,7 +66,7 @@ def check_utils_version(outfile):
 
     for util in utils:
         if not shutil.which(util):
-            sys.stderr.write(f"{util} not found! Check $PATH. Exiting.\n")
+            sys.stderr.write(f"{util} not found!\n")
             STATUS_CODE = False
         else:
             cmd = subprocess.run(util, shell=True, stdout=subprocess.PIPE)
@@ -194,6 +194,10 @@ def get_blacklists(genome):
 
 def strip_ext(fastq):
     return os.path.basename(fastq).replace(".fastq.gz", "")
+
+
+def get_io_limit():
+    return config.get("params_io_limit", 10)
 
 ##
 ## Pipeline
@@ -344,6 +348,7 @@ rule merge_readgroups:
         ]
     output:
         _libraries("merge_readgroups", "{library}.bam")
+    resources: io_concurrent = get_io_limit()
     threads: 2
     shell:
         """samtools merge -@{threads} {output} {input}"""
@@ -361,6 +366,7 @@ rule mark_duplicates:
     params:
         metrics = _libraries("mark_duplicates", "{library}.md.metrics"),
         tmp_dir = _libraries("mark_duplicates")
+    resources: io_concurrent = get_io_limit()
     log:
         _log("{library}.md.log")
     shell:
@@ -531,6 +537,7 @@ rule merge_libraries:
     output:
         bam = _samples("merge_libraries", "{sample}.bam"),
         bai = _samples("merge_libraries", "{sample}.bam.bai")
+    resources: io_concurrent = get_io_limit()
     threads: 2
     shell:
         """
@@ -836,7 +843,10 @@ rule versions:
     output:
         _versions("version.txt")
     run:
-        check_utils_version(output)
+        status = check_utils_version(output)
+        if not status:
+            print("Check $PATH. Aborting.", file=sys.stderr)
+            sys.exit(1)
 
 ##
 ## rule all
