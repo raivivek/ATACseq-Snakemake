@@ -65,15 +65,13 @@ def create_library_item():
 #    files = glob.glob('/path/to/*.fastq.gz')
 #
 #    for fastq in files:
-#        lib, f_or_s = parse_fastq_name(fastq)
+#        sample, lib, rg, f_or_s = parse_fastq_name(fastq)
 #
 #        if lib not in LIBRARIES:
 #            LIBRARIES[lib] = {}
 #            LIBRARIES[lib]['genome'] = 'hg19'
+#            LIBRARIES[lib]['sample'] = sample
 #            LIBRARIES[lib]['readgroups'] = {}
-#
-#        # generate readgroups
-#        rg = lib + '_RG1'
 #
 #        if rg not in LIBRARIES[lib]['readgroups']:
 #            LIBRARIES[lib]['readgroups'][rg] = []
@@ -83,5 +81,5 @@ def create_library_item():
 
 
 if __name__ == "__main__":
-#    create_library_item()
+    #    create_library_item()
     print(yaml.dump(LIBRARIES, indent=4, default_flow_style=False))

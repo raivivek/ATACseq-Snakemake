@@ -19,6 +19,7 @@ mark_duplicates:
 
 merge_libraries:
   cpus: "2"
+  mem: "5G"
 
 bam2bed:
   time: "1:00:00"

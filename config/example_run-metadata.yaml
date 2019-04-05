@@ -7,7 +7,6 @@ bwa_index:
     hg19: /lab/data/reference/human/hg19/index/bwa/current/hg19
     mm9: /lab/data/reference/mouse/mm9/index/bwa/current/mm9
     rn5: /lab/data/reference/rat/rn5/index/bwa/current/rn5
-email: example@wolverine.theparkerlab.org
 tss:
     hg19: /lab/data/reference/human/hg19/annot/hg19.tss.refseq.bed
     mm9: /lab/data/reference/mouse/mm9/annot/mm9.tss.refseq.bed
@@ -18,3 +17,6 @@ chrom_sizes:
     rn5: /lab/data/reference/rat/rn5/annot/rn5.chrom.sizes
 whitelist:
     rn5: /lab/data/reference/rat/rn5/annot/rn5.K30.mappable_only.bed.gz
+params:
+  seed: 2018
+  macs2_fdr: 0.05

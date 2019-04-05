@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 #
-# (c) The Parker Lab
+# The Parker Lab
 # theparkerlab.org
 #
 # University of Michigan, Ann Arbor
@@ -15,15 +15,19 @@ from functools import partial
 
 
 if not config.get("results"):
-  print("`results` dir not set. Check config. Exiting.")
-  sys.exit(1)
+    print("`results` dir not set. Check config. Exiting.")
+    sys.exit(1)
 
 if not config.get("email"):
-  print("WARN: User email not set. No notifications will be sent!")
+    print("WARN: User email not set. No notifications will be sent!")
+
+if not config.get("params"):
+    print("WARN: Parameters are not set, will use default where possible")
+    config["params"] = {}
 
 
 ##
-# Metadata
+## Metadata
 ##
 ORGANISMS = {
     "rn4": "rat",
@@ -59,25 +63,30 @@ MACS2_GENOME_SIZE = {
 def check_utils_version(outfile):
     """Check if the tools exists, and if they do, collect their version number.
     Otherwise, exit with an unpleasant error message."""
-    utils = ["fastqc", "cta", "samtools", "bwa", "macs2", "ataqv", "picard",
-             "bedtools", "pigz"]
 
-    outf, STATUS_CODE = open(outfile, "w"), True
+    utils = ["fastqc -v", "cta --version", "cutadapt --version",
+             "samtools --version", "bwa", "macs2 --version", "ataqv --version",
+             "picard --version", "bedtools --version", "pigz --version"]
+
+    f_out, STATUS_CODE = open(outfile, "w"), True
 
     for util in utils:
-        if not shutil.which(util):
-            sys.stderr.write(f"{util} not found!\n")
+        if not shutil.which(util.split()[0]):
+            msg = f"{util} not found!\n"
             STATUS_CODE = False
         else:
-            cmd = subprocess.run(util, shell=True, stdout=subprocess.PIPE)
-            outf.write(cmd)
+            # should not fail with a "CalledProcessError" since we've already
+            # checked if the binary exists or not.
+            msg = subprocess.check_output(util, shell=True, encoding="utf8")
 
-    outf.close()
+        f_out.write(msg)
+
+    f_out.close()
     return STATUS_CODE
 
 
 ##
-# Generate paths
+## Generate paths
 ##
 _results = partial(os.path.join, config["results"])
 _libraries = partial(_results, "libraries")
@@ -192,12 +201,9 @@ def get_blacklists(genome):
     return config["blacklist"].get(genome)
 
 
-def strip_ext(fastq):
-    return os.path.basename(fastq).replace(".fastq.gz", "")
+def strip_ext(fastq, ext=".fastq.gz"):
+    return os.path.basename(fastq).replace(ext, "")
 
-
-def get_io_limit():
-    return config.get("params_io_limit", 10)
 
 ##
 ## Pipeline
@@ -212,7 +218,7 @@ rule make_libraries:
             fastq=[strip_ext(x) for x in iterate_all_fastqs()]
         ),
         expand(
-            _libraries("fastqc_post-clip", "{fastq}_fastqc.zip"),
+            _libraries("fastqc_post-clip", "{fastq}.cl_fastqc.zip"),
             fastq=[strip_ext(x) for x in iterate_all_fastqs()]
         ),
         expand(
@@ -238,7 +244,10 @@ rule raw_fastqc:
 
 
 rule trim:
-    """Use cta to trim adapter sequences."""
+    """Use cta to trim adapter sequences.
+
+    See https://github.com/ParkerLab/cta.
+    """
     input:
         R1 = lambda wildcards: fastq_basename_to_fastq(
             f"{wildcards.fastq_basename}.R1.fastq.gz"
@@ -262,8 +271,8 @@ rule clip_reads:
         R1 = _libraries("clipped", "{fastq_basename}.R1.cl.fastq.gz"),
         R2 = _libraries("clipped", "{fastq_basename}.R2.cl.fastq.gz")
     params:
-        libraries = config.get('params_clip_samples'),
-        length = config.get("params_clip_length")
+        libraries = config["params"].get("clip_samples"),
+        length = config["params"].get("clip_length")
     run:
         #
         ## If FASTQ needs clipping, use cutadapt otherwise simply symlink
@@ -285,7 +294,7 @@ rule post_fastqc:
     input:
         _libraries("clipped", "{fastq_basename}.cl.fastq.gz"),
     output:
-        _libraries("fastqc_post-clip", "{fastq_basename}_fastqc.zip")
+        _libraries("fastqc_post-clip", "{fastq_basename}.cl_fastqc.zip")
     params:
         outdir = _libraries("fastqc_post-clip")
     log:
@@ -348,7 +357,7 @@ rule merge_readgroups:
         ]
     output:
         _libraries("merge_readgroups", "{library}.bam")
-    resources: io_concurrent = get_io_limit()
+    resources: io_concurrent = 1
     threads: 2
     shell:
         """samtools merge -@{threads} {output} {input}"""
@@ -365,8 +374,8 @@ rule mark_duplicates:
         bai = _libraries("mark_duplicates", "{library}.md.bam.bai")
     params:
         metrics = _libraries("mark_duplicates", "{library}.md.metrics"),
-        tmp_dir = _libraries("mark_duplicates")
-    resources: io_concurrent = get_io_limit()
+        tmp_dir = config["params"].get("tmp_dir")
+    resources: io_concurrent = 2
     log:
         _log("{library}.md.log")
     shell:
@@ -447,7 +456,7 @@ rule peaks:
           --SPMR \
           &> {log}
 
-        pigz {wildcards.library}_treat_pileup.bdg
+        pigz {params.outdir}/{wildcards.library}_treat_pileup.bdg
         """
 
 
@@ -525,6 +534,7 @@ rule make_samples:
             _samples("ataqv", "{sample}.ataqv.json.gz"),
             sample=iterate_all_samples()
         ),
+        expand(_samples("gb", "{sample}.bw"), sample=iterate_all_samples()),
         _samples("macs2", "all-samples.master-peaks.bed")
 
 
@@ -537,12 +547,12 @@ rule merge_libraries:
     output:
         bam = _samples("merge_libraries", "{sample}.bam"),
         bai = _samples("merge_libraries", "{sample}.bam.bai")
-    resources: io_concurrent = get_io_limit()
+    resources: io_concurrent = 1
     threads: 2
     shell:
         """
         samtools merge -@{threads} - {input} \
-            | samtools sort -m 4G -O bam -o {output} - 2> /dev/null
+            | samtools sort -m 4G -O bam -o {output.bam} - 2> /dev/null
 
         samtools index -@{threads} {output.bam}
 
@@ -682,6 +692,7 @@ rule downsample:
             _downsampled("ataqv", "{sample}.ataqv.json.gz"),
             sample=iterate_all_samples()
         ),
+        expand(_downsampled("gb", "{sample}.bw"), sample=iterate_all_samples()),
         _downsampled("macs2", "all-samples.master-peaks.bed")
 
 
@@ -694,8 +705,8 @@ rule downsample_bam:
         flagstat = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam.flagstat")
   threads: 1
   params:
-        seed = config.get('params_seed', 2018),
-        depth = config.get("params_downsample_depth")
+        seed = config["params"].get("seed", 2018),
+        depth = config["params"].get("subsample_depth")
   run:
       # if not supplied; no need to downsample, just print error and exit
       if params.depth is None:
@@ -788,7 +799,7 @@ rule downsample_master_peaks:
     output:
         _downsampled("macs2", "all-samples.master-peaks.bed")
     params:
-        fdr = config.get("params_macs2_fdr", 0.05)
+        fdr = config["params"].get("macs2_fdr", 0.05)
     shell:
         """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
 
@@ -835,6 +846,8 @@ rule downsample_bigwig:
         sizes = lambda wildcards: get_chrom_sizes(get_sample_genome(wildcards.sample))
     shell:
         """bdgTobw {input} {params.sizes} {output}"""
+
+
 ##
 ## debug info
 ##
@@ -865,11 +878,11 @@ rule all:
 
 onerror:
   print("Error: Snakemake aborted!")
-  shell("mail -s 'Snakemake Job Error: See log inside!' {config.get('email')} < {log}")
+  shell("mail -s 'Snakemake Job Error: See log inside!' {config['email']} < {log}")
 
 
 onsuccess:
   print("Success: Snakemake completed!")
-  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config.get('email')} < {log}")
+  shell("mail -s 'Snakemake Job Completed: Have a Beer!' {config['email']} < {log}")
 
 # vim: syntax=python
