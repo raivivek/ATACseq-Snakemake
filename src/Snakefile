@@ -599,7 +599,7 @@ rule sample_peaks:
           --SPMR \
           &> {log}
 
-        pigz {wildcards.sample}_treat_pileup.bdg
+        pigz {params.outdir}/{wildcards.sample}_treat_pileup.bdg
         """
 
 
