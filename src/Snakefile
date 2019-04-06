@@ -456,7 +456,8 @@ rule peaks:
           --SPMR \
           &> {log}
 
-        pigz {params.outdir}/{wildcards.library}_treat_pileup.bdg
+        pigz {params.outdir}/{wildcards.library}_treat_pileup.bdg \
+                {params.outdir}/{wildcards.library}_control_lambda.bdg
         """
 
 
@@ -535,7 +536,8 @@ rule make_samples:
             sample=iterate_all_samples()
         ),
         expand(_samples("gb", "{sample}.bw"), sample=iterate_all_samples()),
-        _samples("macs2", "all-samples.master-peaks.bed")
+        _samples("macs2", "all-samples.master-peaks.bed"),
+        directory(_samples("viewer"))
 
 
 rule merge_libraries:
@@ -599,7 +601,8 @@ rule sample_peaks:
           --SPMR \
           &> {log}
 
-        pigz {params.outdir}/{wildcards.sample}_treat_pileup.bdg
+        pigz {params.outdir}/{wildcards.sample}_treat_pileup.bdg \
+                {params.outdir}/{wildcards.sample}_control_lambda.bdg
         """
 
 
@@ -672,6 +675,18 @@ rule sample_bigwig:
         sizes = lambda wildcards: get_chrom_sizes(get_sample_genome(wildcards.sample))
     shell:
         """bdgTobw {input} {params.sizes} {output}"""
+
+
+rule sample_viewer:
+    input:
+        expand(_samples("ataqv", "{sample}.ataqv.json.gz"),
+                sample=iterate_all_samples)
+    output:
+        directory(_samples("viewer"))
+    params:
+        description = config["params"].get("description", "Samples")
+    shell:
+        """mkarv -d {params.description} {output} {input}"""
 
 
 #rule sample_track_lines:
@@ -773,7 +788,8 @@ rule downsample_call_peaks:
           --SPMR \
           &> {log}
 
-        pigz {wildcards.sample}_treat_pileup.bdg
+        pigz {params.outdir}/{wildcards.sample}_treat_pileup.bdg \
+                {params.outdir}/{wildcards.sample}_control_lambda.bdg
         """
 
 
