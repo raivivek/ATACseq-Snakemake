@@ -217,10 +217,10 @@ rule make_libraries:
             _libraries("fastqc", "{fastq}_fastqc.zip"),
             fastq=[strip_ext(x) for x in iterate_all_fastqs()]
         ),
-        expand(
-            _libraries("fastqc_post-clip", "{fastq}.cl_fastqc.zip"),
-            fastq=[strip_ext(x) for x in iterate_all_fastqs()]
-        ),
+        # expand(
+        #     _libraries("fastqc_post-clip", "{fastq}.cl_fastqc.zip"),
+        #     fastq=[strip_ext(x) for x in iterate_all_fastqs()]
+        # ),
         expand(
             _libraries("ataqv", "{library}.ataqv.json.gz"),
             library=iterate_all_libraries()
@@ -271,26 +271,30 @@ rule clip_reads:
         R1 = _libraries("clipped", "{fastq_basename}.R1.cl.fastq.gz"),
         R2 = _libraries("clipped", "{fastq_basename}.R2.cl.fastq.gz")
     params:
-        libraries = config["params"].get("clip_samples"),
+        libraries = config["params"].get("clip_readgroups"),
         length = config["params"].get("clip_length")
     run:
+        # If FASTQ needs clipping, use cutadapt otherwise simply symlink
         #
-        ## If FASTQ needs clipping, use cutadapt otherwise simply symlink
-        #
-        if wildcards.fastq_basename in params.libraries:
-            shell(
-                "cutadapt -u {params.length} -U {params.length} \
-                -o {output.R1} -p {output.R2} {input.R1} {input.R2}"
-            )
-        else:
+        if (params.libraries is None) or (params.length is None):
+            sys.stderr.write(f"Skipping rule clip_reads. Check params.\n")
+            skip = True
+
+        if (wildcards.fastq_basename not in params.libraries) or skip:
             shell(
                 "ln -s {input.R1} {output.R1} \
                     && ln -s {input.R2} {output.R2}"
             )
+        else:
+            shell(
+                "cutadapt -u {params.length} -U {params.length} \
+                -o {output.R1} -p {output.R2} {input.R1} {input.R2}"
+            )
 
 
 rule post_fastqc:
-    """Run FastQC after trimming and clipping"""
+    """Run FastQC after trimming and clipping. This rule should be skipped when
+    there is no clipping involved."""
     input:
         _libraries("clipped", "{fastq_basename}.cl.fastq.gz"),
     output:
@@ -358,9 +362,12 @@ rule merge_readgroups:
     output:
         _libraries("merge_readgroups", "{library}.bam")
     resources: io_concurrent = 1
-    threads: 2
-    shell:
-        """samtools merge -@{threads} {output} {input}"""
+    threads: 1
+    run:
+        if len(input) > 1:
+            shell("samtools merge -@{threads} {output} {input}")
+        else:
+            shell("ln -s {input} {output}")
 
 
 rule mark_duplicates:
@@ -758,15 +765,24 @@ rule downsample_bam:
         )
 
 
-rule downsample_call_peaks:
+rule downsample_bam_to_bed:
     input:
         _downsampled("merge_libraries", "{sample}.dwnsmpl.bam"),
+    output:
+        _downsampled("bam2bed", "{sample}.dwnsmpl.bed"),
+    shell:
+        """bedtools bamtobed -i {input} > {output}"""
+
+
+rule downsample_call_peaks:
+    input:
+        _downsampled("bam2bed", "{sample}.dwnsmpl.bed"),
     output:
         peaks = _downsampled("macs2", "{sample}_peaks.broadPeak"),
         bdg = _downsampled("macs2", "{sample}_treat_pileup.bdg.gz"),
     params:
         name = "{sample}",
-        outdir = _samples("macs2"),
+        outdir = _downsampled("macs2"),
         genome_size = lambda wildcards: MACS2_GENOME_SIZE[get_sample_genome(wildcards.sample)]
     log:
         _log("{sample}.dwnsmpl.macs2.out")
@@ -808,9 +824,9 @@ rule downsample_noblacklist:
 
 rule downsample_master_peaks:
     input:
-        lambda wildcards: [
+        expand(
             _downsampled("macs2", f"{sample}_peaks.broadPeak.noblacklist")
-            for sample in iterate_all_samples()
+            sample =for sample in iterate_all_samples()
         ]
     output:
         _downsampled("macs2", "all-samples.master-peaks.bed")
