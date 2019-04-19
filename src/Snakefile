@@ -156,9 +156,9 @@ def fastq_basename_to_fastq(fastq_basename):
     sys.exit(1)
 
 
-def fastq_to_clipped_fastq(path, fastq):
+def fastq_to_trimmed_fastq(path, fastq):
     clipped_fastq_basename = os.path.basename(fastq).replace(
-        ".fastq.gz", ".cl.fastq.gz"
+        ".fastq.gz", ".tr.fastq.gz"
     )
     return os.path.join(path, clipped_fastq_basename)
 
@@ -243,11 +243,9 @@ rule raw_fastqc:
         """fastqc {input} -o {params.outdir} &> {log}"""
 
 
-rule trim:
-    """Use cta to trim adapter sequences.
 
-    See https://github.com/ParkerLab/cta.
-    """
+rule clip_reads:
+    """Optionally, clip the reads for a given list of samples"""
     input:
         R1 = lambda wildcards: fastq_basename_to_fastq(
             f"{wildcards.fastq_basename}.R1.fastq.gz"
@@ -255,18 +253,6 @@ rule trim:
         R2 = lambda wildcards: fastq_basename_to_fastq(
             f"{wildcards.fastq_basename}.R2.fastq.gz"
         )
-    output:
-        R1 = _libraries("trimmed", "{fastq_basename}.R1.tr.fastq.gz"),
-        R2 = _libraries("trimmed", "{fastq_basename}.R2.tr.fastq.gz")
-    shell:
-        """cta {input.R1} {input.R2} {output.R1} {output.R2}"""
-
-
-rule clip_reads:
-    """Optionally, clip the reads for a given list of samples"""
-    input:
-        R1 = _libraries("trimmed", "{fastq_basename}.R1.tr.fastq.gz"),
-        R2 = _libraries("trimmed", "{fastq_basename}.R2.tr.fastq.gz")
     output:
         R1 = _libraries("clipped", "{fastq_basename}.R1.cl.fastq.gz"),
         R2 = _libraries("clipped", "{fastq_basename}.R2.cl.fastq.gz")
@@ -292,15 +278,29 @@ rule clip_reads:
             )
 
 
-rule post_fastqc:
-    """Run FastQC after trimming and clipping. This rule should be skipped when
-    there is no clipping involved."""
+rule trim:
+    """Use cta to trim adapter sequences.
+
+    See https://github.com/ParkerLab/cta.
+    """
     input:
-        _libraries("clipped", "{fastq_basename}.cl.fastq.gz"),
+        R1 = _libraries("clipped", "{fastq_basename}.R1.cl.fastq.gz"),
+        R2 = _libraries("clipped", "{fastq_basename}.R2.cl.fastq.gz")
     output:
-        _libraries("fastqc_post-clip", "{fastq_basename}.cl_fastqc.zip")
+        R1 = _libraries("trimmed", "{fastq_basename}.R1.tr.fastq.gz"),
+        R2 = _libraries("trimmed", "{fastq_basename}.R2.tr.fastq.gz")
+    shell:
+        """cta {input.R1} {input.R2} {output.R1} {output.R2}"""
+
+
+rule post_fastqc:
+    """Run FastQC after trimming and clipping."""
+    input:
+        _libraries("trimmed", "{fastq_basename}.tr.fastq.gz"),
+    output:
+        _libraries("fastqc_post-trim", "{fastq_basename}.tr_fastqc.zip")
     params:
-        outdir = _libraries("fastqc_post-clip")
+        outdir = _libraries("fastqc_post-trim")
     log:
         _log("fastqc.{fastq_basename}.log")
     shell:
@@ -319,12 +319,12 @@ rule map:
     analysis uses larger size fragments.
     """
     input:
-        R1 = lambda wildcards: fastq_to_clipped_fastq(
-            _libraries("clipped"),
+        R1 = lambda wildcards: fastq_to_trimmed_fastq(
+            _libraries("trimmed"),
             list_readgroup_fastqs(wildcards.readgroup)[0]
         ),
-        R2 = lambda wildcards: fastq_to_clipped_fastq(
-            _libraries("clipped"),
+        R2 = lambda wildcards: fastq_to_trimmed_fastq(
+            _libraries("trimmed"),
             list_readgroup_fastqs(wildcards.readgroup)[1]
         ),
         index = lambda wildcards: get_bwa_index(get_library_genome(wildcards.library))
