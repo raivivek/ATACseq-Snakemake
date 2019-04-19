@@ -22,7 +22,7 @@ if not config.get("email"):
     print("WARN: User email not set. No notifications will be sent!")
 
 if not config.get("params"):
-    print("WARN: Parameters are not set, will use default where possible")
+    print("WARN: Parameters are not set, will use defaults where possible")
     config["params"] = {}
 
 
@@ -224,8 +224,7 @@ rule make_libraries:
         expand(
             _libraries("ataqv", "{library}.ataqv.json.gz"),
             library=iterate_all_libraries()
-        ),
-        _libraries("macs2", "all-libraries.master-peaks.bed"),
+        )
 
 
 rule raw_fastqc:
@@ -243,9 +242,9 @@ rule raw_fastqc:
         """fastqc {input} -o {params.outdir} &> {log}"""
 
 
-
 rule clip_reads:
-    """Optionally, clip the reads for a given list of samples"""
+    """Optionally, clip reads for a given list of samples. Useful when reads
+    come from two sequencing runs but each with different read lengths."""
     input:
         R1 = lambda wildcards: fastq_basename_to_fastq(
             f"{wildcards.fastq_basename}.R1.fastq.gz"
@@ -294,7 +293,7 @@ rule trim:
 
 
 rule post_fastqc:
-    """Run FastQC after trimming and clipping."""
+    """Run FastQC after trimming and clipping (if applicable)."""
     input:
         _libraries("trimmed", "{fastq_basename}.tr.fastq.gz"),
     output:
@@ -364,6 +363,7 @@ rule merge_readgroups:
     resources: io_concurrent = 1
     threads: 1
     run:
+        # Don't bother merging if there's only one readgroup per library
         if len(input) > 1:
             shell("samtools merge -@{threads} {output} {input}")
         else:
@@ -413,7 +413,7 @@ rule prune:
         bai = _libraries("pruned", "{library}.pd.bam.bai")
     params:
         tmp_dir = _libraries("pruned"),
-        mapq = config.get("params_prune_mapq", 30),
+        mapq = config["params"].get("prune_mapq", 30),
         autosomes = lambda wildcards: get_autosomes(get_library_genome(wildcards.library))
     shell:
         """
@@ -481,20 +481,6 @@ rule blacklist_filter:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
 
-rule merged_master_peaks:
-    input:
-        lambda wildcards: [
-            _libraries("macs2", f"{library}_peaks.broadPeak.noblacklist")
-            for library in iterate_all_libraries()
-        ]
-    output:
-        _libraries("macs2", "all-libraries.master-peaks.bed")
-    params:
-        fdr = config.get("params_macs2_fdr", 0.05)
-    shell:
-        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
-
-
 rule ataqv:
     """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
     The tools provides many useful metrics such as Fragment Length
@@ -543,8 +529,6 @@ rule make_samples:
             sample=iterate_all_samples()
         ),
         expand(_samples("gb", "{sample}.bw"), sample=iterate_all_samples()),
-        _samples("macs2", "all-samples.master-peaks.bed"),
-        directory(_samples("viewer"))
 
 
 rule merge_libraries:
@@ -626,20 +610,6 @@ rule sample_noblacklist:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
 
 
-rule sample_merged_master_peaks:
-    input:
-        expand(
-            _samples("macs2", "{sample}_peaks.broadPeak.noblacklist"),
-            sample=iterate_all_samples()
-        )
-    output:
-        _samples("macs2", "all-samples.master-peaks.bed")
-    params:
-        fdr = config.get("params_macs2_fdr", 0.05)
-    shell:
-        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
-
-
 rule sample_ataqv:
     """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
     The tools provides many useful metrics such as Fragment Length
@@ -696,9 +666,6 @@ rule sample_viewer:
         """mkarv -d {params.description} {output} {input}"""
 
 
-#rule sample_track_lines:
-
-
 ##
 ## 3. (Optional) Perform downsampling; call `rule downsample` directly
 ##
@@ -711,11 +678,9 @@ rule downsample:
     input:
         rules.make_samples.input,
         expand(
-            _downsampled("ataqv", "{sample}.ataqv.json.gz"),
+            _downsampled("macs2", "{sample}_peaks.broadPeak.noblacklist"),
             sample=iterate_all_samples()
-        ),
-        expand(_downsampled("gb", "{sample}.bw"), sample=iterate_all_samples()),
-        _downsampled("macs2", "all-samples.master-peaks.bed")
+        )
 
 
 rule downsample_bam:
@@ -820,64 +785,6 @@ rule downsample_noblacklist:
         )
     shell:
         """mappabilityFilter -i {input} -b {params.blacklists} > {output}"""
-
-
-rule downsample_master_peaks:
-    input:
-        expand(
-            _downsampled("macs2", f"{sample}_peaks.broadPeak.noblacklist")
-            sample =for sample in iterate_all_samples()
-        ]
-    output:
-        _downsampled("macs2", "all-samples.master-peaks.bed")
-    params:
-        fdr = config["params"].get("macs2_fdr", 0.05)
-    shell:
-        """createMasterPeaks {input} --fdr {params.fdr} > {output}"""
-
-
-rule downsample_ataqv:
-    """Ataqv-toolkit is a ATAC-seq experiment QC tool developed in Parker Lab.
-    The tools provides many useful metrics such as Fragment Length
-    Distribution, TSS Enrichment, for quality comparison and downstream
-    analysis.
-
-    See: https://github.com/ParkerLab/ataqv
-    """
-    input:
-        bam = _downsampled("merge_libraries", "{sample}.dwnsmpl.bam"),
-        peaks = _downsampled("macs2", "{sample}_peaks.broadPeak.noblacklist")
-    output:
-        _downsampled("ataqv", "{sample}.ataqv.json.gz")
-    params:
-        name = "{sample}",
-        description = "{sample}",
-        organism = lambda wildcards: get_organism(get_sample_genome(wildcards.sample)),
-        tss = lambda wildcards: get_tss(get_sample_genome(wildcards.sample))
-    log:
-        _log("{sample}.dwnsmpl.ataqv.log")
-    shell:
-        """
-        ataqv --peak-file {input.peaks}    \
-          --name {params.description}      \
-          --metrics-file {output}          \
-          --tss-file {params.tss}          \
-          --ignore-read-groups             \
-          {params.organism}                \
-          {input.bam}                      \
-          > {log}
-        """
-
-
-rule downsample_bigwig:
-    input:
-        _downsampled("macs2", "{sample}_treat_pileup.bdg.gz"),
-    output:
-        _downsampled("gb", "{sample}.bw")
-    params:
-        sizes = lambda wildcards: get_chrom_sizes(get_sample_genome(wildcards.sample))
-    shell:
-        """bdgTobw {input} {params.sizes} {output}"""
 
 
 ##
