@@ -20,11 +20,11 @@ rule downsample_bam:
   input:
         rules.merge_libraries.output
   output:
-        bam = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam"),
-        bai = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam.bai"),
-        flagstat = _downsampled('merge_libraries', "{sample}.dwnsmpl.bam.flagstat")
+        bam = _downsampled("merge_libraries", "{sample}.dwnsmpl.bam"),
+        bai = _downsampled("merge_libraries", "{sample}.dwnsmpl.bam.bai")
   threads: 1
   params:
+        outdir = _downsampled("merge_libraries"),
         seed = config["params"].get("seed", 2018),
         depth = config["params"].get("subsample_depth")
   run:
@@ -33,34 +33,7 @@ rule downsample_bam:
           sys.stderr.write("ERROR: Subsampling depth not supplied; Exiting!\n")
           sys.exit(1)
       else:
-          # Compute desired fraction of reads to sub-sample using samtools
-          # flagstat.
-          #
-          # NOTE: __TOTAL_READS computes the total number of # "single-reads" in the
-          # given input BAM file, and then we compute the fraction to subsample
-          # in __FRACTION (requires `bc` tools, POSIX so almost always
-          # available). The __FRACTION value already contains a "." (period) so
-          # we omit that in samtools call. `scale=3` in `bc -l` limits the number
-          # of decimal places to 3.
-          #
-          # Further, simply symlink files if desired depth is more then available
-          # number of reads in the file.
-          #
-          # NOTE: (( . )) is not a typo. Using BASH"s arithmetic context.
-        shell(
-        """
-            __TOTAL_READS=$(samtools view -cF 0x100 {input.bam}) \
-            && if (( $_TOTAL_READS < {params.depth} )); then
-                ln -s {input.bam} {output.bam}
-                ln -s {input.bai} {output.bai}
-            else
-                __FRACTION=$(bc -l <<< "scale=3; {params.depth}/$__TOTAL_READS") \
-                && samtools view -@ {threads} -b -h -s {params.seed}$__FRACTION {input.bam} -o {output.bam}
-                samtools index {output.bam}
-                samtools flagstat {output.bam} > {output.flagstat}
-            fi
-        """
-        )
+        shell("subsampleBams {input} --number-reads {params.depth} -o {params.outdir}")
 
 
 rule downsample_bam_to_bed:
@@ -111,16 +84,19 @@ rule downsample_noblacklist:
     input:
         _downsampled("macs2", "{sample}_peaks.broadPeak")
     output:
-        _downsampled("macs2", "{sample}_peaks.noblacklist.bed")
+        noblacklist = _downsampled("macs2", "{sample}_peaks.broadPeak.noblacklist"),
+        fdr05 = _downsampled("macs2", "{sample}_peaks.fdr05.bed")
     params:
         blacklists = lambda wildcards: " ".join(
             get_blacklists(get_sample_genome(wildcards.sample))
         ),
         fdr = config["params"].get("macs2_fdr", 0.05),
     shell:
-        """mappabilityFilter -i {input} -b {params.blacklists} | \
-                createMasterPeaks --fdr {params.fdr} > {output}
+        """mappabilityFilter -i {input} -b {params.blacklists} \
+            | tee {output.noblacklist} \
+            | createMasterPeaks --fdr {params.fdr} > {output.fdr05}
         """
+
 
 rule make_master_downsample_bed:
     input:
@@ -140,7 +116,7 @@ rule call_master_peaks:
     output:
         peaks = _downsampled("master-peaks", "{prefix}_peaks.broadPeak"),
         bdg = _downsampled("master-peaks", "{prefix}_treat_pileup.bdg.gz"),
-        bed = _downsampled("master-peaks", "{prefix}_peaks.noblacklist.bed"),
+        bed = _downsampled("master-peaks", "{prefix}_peaks.fdr05.bed"),
     params:
         name = "{prefix}",
         outdir = _downsampled("master-peaks"),

@@ -86,15 +86,17 @@ rule sample_noblacklist:
     input:
         _samples("macs2", "{sample}_peaks.broadPeak")
     output:
-        _samples("macs2", "{sample}_peaks.noblacklist.bed")
+        noblacklist = _samples("macs2", "{sample}_peaks.broadPeak.noblacklist"),
+        fdr05 = _samples("macs2", "{sample}_peaks.fdr05.bed")
     params:
         blacklists = lambda wildcards: " ".join(
             get_blacklists(get_sample_genome(wildcards.sample))
         ),
         fdr = config["params"].get("macs2_fdr", 0.05),
     shell:
-        """mappabilityFilter -i {input} -b {params.blacklists} | \
-                createMasterPeaks --fdr {params.fdr} > {output}
+        """mappabilityFilter -i {input} -b {params.blacklists} \
+            | tee {output.noblacklist} \
+            | createMasterPeaks --fdr {params.fdr} > {output.fdr05}
         """
 
 
@@ -108,7 +110,7 @@ rule sample_ataqv:
     """
     input:
         bam = _samples("merge_libraries", "{sample}.bam"),
-        peaks = _samples("macs2", "{sample}_peaks.noblacklist.bed")
+        peaks = _samples("macs2", "{sample}_peaks.fdr05.bed")
     output:
         _samples("ataqv", "{sample}.ataqv.json.gz")
     params:

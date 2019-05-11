@@ -183,6 +183,13 @@ def strip_ext(fastq, ext=".fastq.gz"):
 
 
 ##
+## Optional
+##
+include: "make_samples.smk"
+include: "downsample.smk"
+
+
+##
 ## Pipeline
 ##
 ##   `rule all` is at the end.
@@ -494,13 +501,6 @@ rule ataqv:
         """
 
 
-#
-# [ O P T I O N A L ]
-#
-include: "make_samples.smk"
-include: "downsample.smk"
-
-
 ##
 ## rule all
 ##
@@ -513,6 +513,7 @@ rule all:
         rules.make_libraries.input,
         rules.make_samples.input,
         rules.downsample.input
+
 
 ##
 ## notification
