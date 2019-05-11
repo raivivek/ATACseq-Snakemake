@@ -53,12 +53,12 @@ def parse_fastq_name(f):
 def create_library_item():
     """ Parse FASTQ filenames; and return a dictionary with library names
     containing FASTQ files. For example, a library entry looks like
-    
+
     {
         'genome': 'hg19',
         'readgroups': ['ABCD123.1.fastq.gz', 'ABCD123.2.fastq.gz']
     }
-    
+
     """
 
 
@@ -81,5 +81,5 @@ def create_library_item():
 
 
 if __name__ == "__main__":
-    #    create_library_item()
-    print(yaml.dump(LIBRARIES, indent=4, default_flow_style=False))
+    # create_library_item()
+    print(yaml.dump({"libraries": LIBRARIES}, indent=4, default_flow_style=False))

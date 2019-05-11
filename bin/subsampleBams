@@ -1,0 +1,165 @@
+#! /usr/bin/env python3
+
+# The Parker Lab
+# University of Michigan
+# theparkerlab.org
+
+# Original author: Peter Orchard
+# Multiprocessing adaptations: Vivek Rai
+
+import os
+import sys
+import signal
+import argparse
+from pathlib import Path
+from itertools import repeat
+from sys import stderr, stdout
+from multiprocessing import Pool
+
+import pysam
+
+
+def worker_init():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description="Subsample a set of bam files.")
+    parser.add_argument(
+        "--suffix", type=str, default="dwnsmpl", help="XXXXX.bam -> XXXXX.suffix.bam."
+    )
+    parser.add_argument("bam", nargs="+", type=str, help="The bams to subsample.")
+    parser.add_argument(
+        "--number-reads",
+        dest="number_reads",
+        type=int,
+        nargs="?",
+        help="Subsample to given depth; alternatively see option --same-depth.",
+    )
+    parser.add_argument(
+        "--same-depth",
+        dest="same_depth",
+        action="store_true",
+        help="Subsample to min depth in the list; not used if --number-reads is used.",
+    )
+    parser.add_argument("-o", "--output", help="Output dir")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--seed", type=int, default=2018, help="Seed for the sampler.")
+    parser.add_argument("-j", "--parallel", type=int, default=1, help="Parallel jobs.")
+
+    args = parser.parse_args()
+
+    if args.number_reads and args.same_depth:
+        args.same_depth = False
+        print("--number-reads was passed ignoring --same-depth", file=stderr)
+
+    if args.number_reads is None and not args.same_depth:
+        print("Error: --number-reads or --same-depth must be passed", file=stderr)
+        sys.exit(1)
+
+    return args
+
+
+def get_total_reads(bam):
+    bam_prefix = Path(bam).stem
+    num_reads = float(pysam.view("-cF 0x100", bam).strip())
+
+    print(f"Found {num_reads} reads in {bam_prefix}.", file=stderr)
+
+    return {bam_prefix: num_reads}
+
+
+def subsample(bam, args):
+    bam_prefix, out_path = Path(bam).stem, Path(bam).parent
+    subsample_fraction = None
+
+    if args.number_reads is not None:
+        subsample_fraction = float(args.number_reads) / number_reads[bam_prefix]
+    else:
+        subsample_fraction = min(number_reads) / float(number_reads[bam_prefix])
+        print(subsample_fraction)
+
+    if args.verbose:
+        if args.number_reads:
+            if subsample_fraction >= 1:
+                print(
+                    f"Keeping all reads from {bam}, since the number of reads"
+                    "desired is greater than or equal to the number of reads"
+                    "in the original bam",
+                    file=stdout,
+                )
+            else:
+                print(
+                    f"Subsampling {bam} to approximately {args.number_reads} reads",
+                    file=stderr,
+                )
+        else:
+            print(
+                f"Subsampling {bam} to approximately {min(number_reads.values())} reads",
+                file=stderr,
+            )
+
+    if args.output is None:
+        args.output = out_path
+
+    if not os.path.exists(args.output):
+        os.makedirs(args.output, exist_ok=True)
+
+    out_file = f"{args.output}/{bam_prefix}.{args.suffix}.bam"
+
+    if subsample_fraction >= 1:
+        print(f"{bam_prefix} has less than {args.number_reads} reads..", file=stderr)
+        pysam.view("-h", "-b", "-o", f"{out_file}", bam, catch_stdout=False)
+        pysam.index(f"{out_file}", catch_stdout=False)
+    else:
+        subsample_fraction = f"{subsample_fraction:.3f}".lstrip("01")
+        print(f"Writing to {args.output}/{bam_prefix}.{args.suffix}.bam..", file=stderr)
+
+        pysam.view(
+            "-h",
+            "-b",
+            "-s",
+            f"{args.seed}{subsample_fraction}",
+            "-o",
+            f"{out_file}",
+            bam,
+            catch_stdout=False,
+        )
+        pysam.index(f"{out_file}", catch_stdout=False)
+
+
+if __name__ == "__main__":
+    args = get_args()
+
+    number_reads = {}
+    number_bams = len(args.bam)
+    print(f"Will run {args.parallel} jobs in parallel..", file=stderr)
+
+    pool = Pool(processes=args.parallel, initializer=worker_init)
+
+    if args.verbose:
+        print("Computing total reads in each file..", file=stderr)
+    async_result = pool.map_async(get_total_reads, args.bam)
+
+    try:
+        result = async_result.get()
+        for k in result:
+            number_reads.update(k)
+    except Exception as e:
+        print("Couldn't compute reads in each file")
+        print(e)
+    finally:
+        pool.close()
+
+    pool = Pool(processes=args.parallel, initializer=worker_init)
+    subsample_result = pool.starmap_async(
+        subsample, zip(args.bam, repeat(args, number_bams))
+    )
+
+    try:
+        status = subsample_result.get()
+    except Exception as e:
+        print("Subsampling failed.")
+        print(e)
+    finally:
+        pool.close()

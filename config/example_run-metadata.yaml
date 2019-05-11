@@ -20,3 +20,4 @@ whitelist:
 params:
   seed: 2018
   macs2_fdr: 0.05
+  tmp_dir: "/localscratch"
